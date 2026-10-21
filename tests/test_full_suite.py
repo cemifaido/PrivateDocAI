@@ -720,6 +720,50 @@ class TestHardening(unittest.TestCase):
         self.assertEqual(resp.status_code, 423)
         self.assertEqual(service.sessions, {})   # the decrypted session did not come back
 
+    def test_lock_between_final_check_and_commit_voids_the_answer(self):
+        service = app_module.doc_service
+        sid = self._upload(("a.txt", "testo semplice senza nomi"))["session_id"]
+        real_commit = service.process_llm_response_if_current
+
+        def lock_before_commit(session_id, response, expected_epoch):
+            service.lock_all()
+            return real_commit(session_id, response, expected_epoch)
+
+        real_bridge = service.browser_bridge.execute_prompt
+        service.browser_bridge.execute_prompt = lambda provider, prompt: {
+            "status": "success", "response": "RISPOSTA RISERVATA"
+        }
+        service.process_llm_response_if_current = lock_before_commit
+        try:
+            resp = self.client.post("/api/execute", json={
+                "session_id": sid, "provider": "gemini", "instruction": "analizza"
+            })
+        finally:
+            service.process_llm_response_if_current = real_commit
+            service.browser_bridge.execute_prompt = real_bridge
+        self.assertEqual(resp.status_code, 423)
+        self.assertFalse(service.vault.unlocked)
+        self.assertEqual(service.sessions, {})
+
+    def test_lock_during_extraction_discards_the_upload_commit(self):
+        service = app_module.doc_service
+        real_extract = service.extractor.extract_with_report
+
+        def lock_during_extract(filename, content):
+            service.lock_all()
+            return real_extract(filename, content)
+
+        service.extractor.extract_with_report = lock_during_extract
+        try:
+            resp = self.client.post(
+                "/api/upload", files=[("files", ("a.txt", b"dati riservati", "text/plain"))]
+            )
+        finally:
+            service.extractor.extract_with_report = real_extract
+        self.assertEqual(resp.status_code, 423)
+        self.assertFalse(service.vault.unlocked)
+        self.assertEqual(service.sessions, {})
+
     def test_second_upload_while_one_is_running_gets_409(self):
         service = app_module.doc_service
         self.assertTrue(service._upload_lock.acquire(blocking=False))

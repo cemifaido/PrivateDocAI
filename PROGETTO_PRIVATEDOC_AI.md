@@ -62,10 +62,10 @@ Permettere a un utente **non addetto ai lavori** (privo di IDE, terminale o comp
 | [`backend/document_service.py`](backend/document_service.py) | Coordinamento della sessione documentale, assemblaggio prompt strutturato (anche il testo fisso viene mascherato), `preflight_report` (dati ancora in chiaro), salvataggio/apertura/rinomina/eliminazione delle pratiche cifrate e generazione report docx. |
 | [`static/index.html`](static/index.html) | Markup moderno in 4 passi (Upload, Scudo Privacy, Elabora, Risultato). |
 | [`static/style.css`](static/style.css) | Design premium dark-mode, glassmorphism, responsive con palette HSL/indaco/smeraldo. |
-| [`static/guida.html`](static/guida.html) | Guida in-app (`/guida`, link nella barra laterale): uso passo per passo, limiti, avvertenze sul provider e tabella dei riferimenti normativi (GDPR, linee guida EDPB 01/2025, WP29 WP216, Codice privacy, segreto professionale, L. 132/2025, AI Act) con l'effetto di ciascuno sul programma. Fonti verificate il 21/10/2026; la parte su L. 132/2025 ed EDPB si basa in parte su commenti, non sui testi ufficiali. |
+| [`static/guida.html`](static/guida.html) | Guida in-app (`/guida`, link nella barra laterale): uso passo per passo, limiti, avvertenze sul provider e tabella dei riferimenti normativi (GDPR, linee guida EDPB 01/2025, WP29 WP216, Codice privacy, segreto professionale, L. 132/2025, AI Act) con l'effetto di ciascuno sul programma. Fonti ufficiali verificate il 21/10/2026; EDPB 01/2025 è indicata correttamente come versione 1 adottata per consultazione. |
 | [`static/app.js`](static/app.js) | Logica client per drag-and-drop, gestione entità in tempo reale, toggle prima/dopo, download, riquadro del controllo pre-invio (blocco, avvisi, protezione con un clic), menu col tasto destro per mascherare testo selezionato nell'anteprima, avviso dei file non considerati, finestra della password e elenco delle pratiche salvate. |
 | [`test_pipeline.py`](test_pipeline.py) | Suite di test end-to-end automatizzata su archivio ZIP reale multi-formato. |
-| [`tests/test_full_suite.py`](tests/test_full_suite.py) | 69 test `unittest`: estrattore, cartelle caricate con sottocartelle e ZIP annidati, OCR in parallelo e interruzione, file non considerati, anonimizzatore, metadati del prompt, carte/targhe, limiti upload, API, archivio cifrato e pratiche salvate. |
+| [`tests/test_full_suite.py`](tests/test_full_suite.py) | 71 test `unittest`: estrattore, cartelle caricate con sottocartelle e ZIP annidati, OCR in parallelo e interruzione, file non considerati, anonimizzatore, metadati del prompt, carte/targhe, limiti upload, API, archivio cifrato, race di blocco e pratiche salvate. |
 
 ---
 
@@ -79,7 +79,7 @@ Il test simula un caso reale aziendale:
 5. **Verifica de-anonimizzazione**: La risposta simulata dell'LLM (contenente solo i token) viene decifrata con successo, ripristinando integralmente i dati reali originali.
 6. **Esito**: `100% Superato con successo (Exit code 0)`.
 
-Dopo le revisioni interne (21/10/2026), il test controlla anche che nessuna entità rilevata resti in chiaro nel testo mascherato. La suite `unittest` (`python -m unittest discover -s tests`) esegue 69 test, inclusi casi di regressione per nomi file, carte di pagamento, targhe, ZIP annidati, upload eccessivi, file non considerati e archivio cifrato; `ruff` non segnala nulla. I test dell'archivio usano una cartella temporanea: la vera `data/` non viene toccata.
+Dopo le revisioni interne (21/10/2026), il test controlla anche che nessuna entità rilevata resti in chiaro nel testo mascherato. La suite `unittest` (`python -m unittest discover -s tests`) esegue 71 test, inclusi casi di regressione per nomi file, carte di pagamento, targhe, ZIP annidati, upload eccessivi, file non considerati, archivio cifrato e operazioni concorrenti al blocco; `ruff` non segnala nulla. I test dell'archivio usano una cartella temporanea: la vera `data/` non viene toccata.
 
 ---
 
@@ -110,9 +110,9 @@ Dopo le revisioni interne (21/10/2026), il test controlla anche che nessuna enti
 
 ## 6. Archivio Protetto e Pratiche Salvate
 
-- **Prima apertura:** l'app chiede una password (due volte, minimo 8 caratteri) e avvisa di annotarla. Non esiste recupero.
-- **Cifratura:** AES-256-GCM, chiave derivata con scrypt (n=2^15, r=8, p=1) e sale casuale in `data/vault.json`. Ogni pratica è un file `data/pratiche/<id>.enc` con nonce casuale; la scrittura è atomica. La chiave resta solo in memoria.
-- **Contenuto di una pratica:** testi estratti, entità e token (quindi `[PERSONA_1]` resta lo stesso nelle analisi successive), elenco dei file non considerati e risposte decifrate. Si salva da sola a ogni caricamento, modifica delle entità e risposta.
+- **Prima apertura:** l'app chiede una password (due volte, minimo 12 caratteri) e avvisa di annotarla. Non esiste recupero.
+- **Cifratura:** AES-256-GCM, chiave derivata con scrypt (N=2^16, r=8, p=2) e sale casuale in `data/vault.json`. Ogni pratica v2 è un file `data/pratiche/<id>.enc` autenticato anche con il proprio identificativo (AAD), con nonce casuale; la scrittura è atomica con `fsync`. La chiave resta solo in memoria.
+- **Contenuto di una pratica:** testi estratti, entità e token (quindi `[PERSONA_1]` resta lo stesso nelle analisi successive), elenco dei file non considerati e risposte decifrate. Le modifiche ravvicinate vengono aggregate per un massimo di 3 secondi; risposte, blocco e chiusura forzano il salvataggio.
 - **Uso:** "Pratiche salvate" nel passo 1 (Apri / Elimina), nome modificabile, "Nuova Pratica", "Blocca archivio" (svuota i dati decifrati dalla memoria).
 - **Non cifrati:** i profili browser in `profiles/` (cookie di Gemini).
 
@@ -154,7 +154,7 @@ Rischi segnalati dalla revisione critica e stato:
 - **Distribuzione — controllo automatico.** `build_exe.bat` esegue `check_dist.py` e fallisce se in `dist\PrivateDocAI` compaiono `data`, `profiles`, `vault.json`, file `.enc` o file tipici dei profili del browser. Non avviare mai l'eseguibile dentro la cartella da distribuire. La firma Authenticode dell'`.exe` resta da fare.
 - **Guida legale — aggiornata.** EDPB 01/2025 descritta come «versione 1 adottata per consultazione» (consultazione chiusa, ancora v1 sulla pagina ufficiale al 21/10/2026); L. 132/2025 con link a Gazzetta Ufficiale e senza «secondo i commenti»; art. 28 CDF e art. 622 c.p. in righe separate con fonti ufficiali; claim assoluti sostituiti da formulazioni prudenti.
 - **Seconda revisione — corretto.**
-  - Il blocco dell'archivio durante un invio in corso rendeva possibile far riapparire in memoria la sessione decifrata: ora blocco, salvataggio e svuotamento sono un'unica operazione (`lock_all`) con un contatore di «epoca»; una risposta arrivata dopo il blocco viene scartata (423). Le modifiche alle entità usano lo stesso lock del servizio.
+  - Il blocco dell'archivio durante un invio in corso rendeva possibile far riapparire in memoria la sessione decifrata: ora blocco, salvataggio e svuotamento sono un'unica operazione (`lock_all`) con un contatore di «epoca». Preparazione del prompt e commit della risposta usano lo stesso lock; verifica dell'epoca, decifratura e salvataggio sono atomici e non ricreano sessioni mancanti. Anche il commit di un upload iniziato prima del blocco viene scartato (423). Le modifiche alle entità usano lo stesso lock del servizio.
   - Il token delle API non si accetta più nell'indirizzo (query string): solo nell'intestazione; il report Word si scarica con `fetch` + Blob.
   - Il controllo pre-invio usa `POST` con il corpo JSON, perché la richiesta dell'utente può contenere dati personali e non deve finire nell'indirizzo o nei log.
   - La conferma sulle parole sospette riguarda l'elenco esatto di quel momento (`confirmed_suspects`): un «sì» vecchio non autorizza parole comparse dopo.

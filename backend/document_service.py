@@ -20,6 +20,10 @@ class UploadBusy(Exception):
     """Another upload is still being processed."""
 
 
+class SessionInvalidated(Exception):
+    """The vault was locked while an operation was running, so its result must be discarded."""
+
+
 class DocumentService:
     def __init__(self, data_dir: Optional[str] = None):
         self.data_dir = data_dir or os.environ.get("PRIVATEDOC_DATA_DIR") or os.path.join(APP_DIR, "data")
@@ -52,7 +56,8 @@ class DocumentService:
 
     @property
     def epoch(self) -> int:
-        return self._epoch
+        with self._state_lock:
+            return self._epoch
 
     def lock_all(self):
         """Saves what is pending, locks the vault and forgets every decrypted session, atomically."""
@@ -173,12 +178,14 @@ class DocumentService:
         if not self._upload_lock.acquire(blocking=False):
             raise UploadBusy()
         try:
-            return self._add_uploaded_files(session_id, files, operation_id)
+            with self._state_lock:
+                expected_epoch = self._epoch
+            return self._add_uploaded_files(session_id, files, operation_id, expected_epoch)
         finally:
             self._upload_lock.release()
 
     def _add_uploaded_files(self, session_id: str, files: List[Tuple_File],
-                            operation_id: Optional[str]) -> Dict[str, Any]:
+                            operation_id: Optional[str], expected_epoch: int) -> Dict[str, Any]:
         job_id = str(uuid.uuid4())
         self._job_id = job_id
         self.progress = {"file": "", "pages_done": 0, "pages_total": 0}
@@ -190,6 +197,7 @@ class DocumentService:
             extracted_all.append(self.extractor.extract_with_report(filename, content))
 
         with self._state_lock:
+            self._require_current_epoch(expected_epoch)
             session = self.get_or_create_session(session_id)
             anonymizer: DeterministicAnonymizer = session["anonymizer"]
             skipped_all = session.setdefault("skipped", [])
@@ -214,6 +222,13 @@ class DocumentService:
                 anonymizer.current_operation = None
             self.persist(session["id"])
             return self._upload_result(session, entities)
+
+    def _require_current_epoch(self, expected_epoch: int, session_id: Optional[str] = None):
+        """Must run under ``_state_lock`` immediately before committing long-running work."""
+        if self._epoch != expected_epoch or (self.vault is not None and not self.vault.unlocked):
+            raise SessionInvalidated("Archivio bloccato durante l'operazione.")
+        if session_id is not None and session_id not in self.sessions:
+            raise SessionInvalidated("La sessione non è più disponibile.")
 
     def _upload_result(self, session: Dict[str, Any], entities: List[Dict[str, Any]]) -> Dict[str, Any]:
         return {
@@ -297,6 +312,19 @@ class DocumentService:
     def has_selected_documents(self, session_id: str) -> bool:
         session = self.get_or_create_session(session_id)
         return any(d.get("selected", True) for d in session["documents"])
+
+    def prepare_execution(
+        self, session_id: str, user_instruction: str, expected_epoch: int
+    ) -> Optional[Dict[str, Any]]:
+        """Builds preflight and prompt from one consistent, still-unlocked session snapshot."""
+        with self._state_lock:
+            self._require_current_epoch(expected_epoch, session_id)
+            session = self.sessions[session_id]
+            if not any(d.get("selected", True) for d in session["documents"]):
+                return None
+            preflight = self.preflight_report(session_id, user_instruction)
+            prompt = self.build_comparison_prompt(session_id, user_instruction)
+            return {"epoch": expected_epoch, "preflight": preflight, "prompt": prompt}
 
     def get_masked_corpus(self, session_id: str) -> Dict[str, Any]:
         session = self.get_or_create_session(session_id)
@@ -397,11 +425,35 @@ class DocumentService:
         """
         Takes the raw LLM response (with tokens like [PERSONA_1]) and de-anonymizes it.
         """
+        with self._state_lock:
+            return self._process_llm_response_locked(session_id, llm_raw_response)
+
+    def process_llm_response_if_current(
+        self, session_id: str, llm_raw_response: str, expected_epoch: int
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Same as `process_llm_response`, but the epoch/unlocked/session-exists check that guards
+        a late browser-bridge answer is made atomic with the commit (both under `_state_lock`):
+        a plain check-then-call from the caller would leave a window where `lock_all()` runs
+        between the check and `process_llm_response`, so a response arriving for an archive that
+        was locked meanwhile could still be decrypted and written back. Returns None if the vault
+        was locked (or its epoch bumped) since `expected_epoch`, or if the session no longer
+        exists — a missing session must not be silently recreated via `get_or_create_session`
+        for a stale response.
+        """
+        with self._state_lock:
+            if self._epoch != expected_epoch or self.vault is None or not self.vault.unlocked:
+                return None
+            if session_id not in self.sessions:
+                return None
+            return self._process_llm_response_locked(session_id, llm_raw_response)
+
+    def _process_llm_response_locked(self, session_id: str, llm_raw_response: str) -> Dict[str, Any]:
         session = self.get_or_create_session(session_id)
         anonymizer: DeterministicAnonymizer = session["anonymizer"]
 
         restored_response = anonymizer.de_anonymize_text(llm_raw_response)
-        
+
         result = {
             "session_id": session_id,
             "raw_masked_response": llm_raw_response,

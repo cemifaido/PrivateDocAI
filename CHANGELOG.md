@@ -21,7 +21,7 @@ Prima versione pubblicata.
 ### Sicurezza
 - Il server risponde solo a richieste dirette a `localhost`, con un token casuale per avvio (difesa da siti esterni e DNS rebinding), mai nell'indirizzo.
 - Archivio cifrato con dati autenticati legati alla pratica, parametri di derivazione limitati, rallentamento dopo tentativi sbagliati e scrittura atomica con `fsync`.
-- Il blocco dell'archivio annulla gli invii in corso e svuota le sessioni decifrate dalla memoria.
+- Il blocco dell'archivio invalida invii e caricamenti già in corso: risposte o documenti arrivati tardi vengono scartati con controllo atomico, senza ricreare sessioni decifrate in memoria.
 
 ### Limiti noti
 - Il riconoscimento dei dati è a regole e non è infallibile: serve sempre la verifica di una persona.

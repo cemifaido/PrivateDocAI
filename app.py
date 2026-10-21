@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field
 
-from backend.document_service import DocumentService, UploadBusy
+from backend.document_service import DocumentService, SessionInvalidated, UploadBusy
 from backend.vault import Vault, VaultError, WrongPassword
 from backend.runtime import RESOURCE_DIR
 
@@ -195,6 +195,8 @@ async def upload_files(
         return await run_in_threadpool(doc_service.add_uploaded_files, s_id, uploaded_tuples, operation_id)
     except UploadBusy:
         raise HTTPException(status_code=409, detail="Un altro caricamento è ancora in corso: attendi che finisca.")
+    except SessionInvalidated:
+        raise HTTPException(status_code=423, detail="vault_locked")
 
 @app.get("/api/upload/progress")
 async def upload_progress():
@@ -357,9 +359,16 @@ def execute_task(data: ExecuteRequest):
     3. Retrieves the raw response
     4. De-anonymizes it locally, restoring real names and data
     """
-    if not doc_service.has_selected_documents(data.session_id):
+    # Captured before preflight/build-prompt: a lock+unlock cycle that happens while those run
+    # would otherwise be invisible to the epoch check below.
+    epoch = doc_service.epoch
+    try:
+        prepared = doc_service.prepare_execution(data.session_id, data.instruction, epoch)
+    except SessionInvalidated:
+        return JSONResponse(status_code=423, content={"detail": "vault_locked"})
+    if prepared is None:
         return {"status": "error", "message": "Seleziona almeno un documento da includere."}
-    preflight = doc_service.preflight_report(data.session_id, data.instruction)
+    preflight = prepared["preflight"]
     if preflight["leaks"]:
         return {
             "status": "error",
@@ -373,14 +382,10 @@ def execute_task(data: ExecuteRequest):
         # appeared after the warning was shown.
         return {"status": "needs_confirmation", "suspects": preflight["suspects"]}
 
-    prompt = doc_service.build_comparison_prompt(data.session_id, data.instruction)
+    prompt = prepared["prompt"]
 
-    epoch = doc_service.epoch
     # Run through browser bridge
     bridge_result = doc_service.browser_bridge.execute_prompt(data.provider, prompt)
-    if doc_service.epoch != epoch or (doc_service.vault is not None and not doc_service.vault.unlocked):
-        # the archive was locked meanwhile: drop the answer, do not rebuild the decrypted session
-        return JSONResponse(status_code=423, content={"detail": "vault_locked"})
     if bridge_result.get("status") != "success":
         return {
             "status": "error",
@@ -389,8 +394,15 @@ def execute_task(data: ExecuteRequest):
         }
 
     raw_response = bridge_result.get("response", "")
-    processed = doc_service.process_llm_response(data.session_id, raw_response)
-    
+    # Epoch/unlocked/session-exists are checked atomically with the commit itself: a plain
+    # check here followed by a separate process_llm_response call would leave a window where
+    # lock_all() runs in between and the response still gets decrypted and written back.
+    processed = doc_service.process_llm_response_if_current(data.session_id, raw_response, epoch)
+    if processed is None:
+        # the archive was locked meanwhile (or the session is gone): drop the answer, do not
+        # rebuild the decrypted session
+        return JSONResponse(status_code=423, content={"detail": "vault_locked"})
+
     return {
         "status": "success",
         "result": processed

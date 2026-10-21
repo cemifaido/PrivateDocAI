@@ -75,7 +75,7 @@ GDPR (art. 4 n. 5, considerando 26, artt. 5, 25, 28, 32, 35, 44-49), linee guida
 ## Sviluppo
 
 ```bash
-python -m unittest discover -s tests     # 69 test
+python -m unittest discover -s tests     # 71 test
 python test_pipeline.py                  # collaudo end-to-end su uno ZIP multi-formato
 ruff check .
 ```
