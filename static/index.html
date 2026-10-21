@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PrivateDoc AI - Privacy Shield & Multi-Document Hub</title>
+    <meta name="privatedoc-token" content="__APP_TOKEN__">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app-layout">
+        <!-- Sidebar Navigation / Status -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        <circle cx="12" cy="11" r="3"/>
+                        <path d="M12 14v3"/>
+                    </svg>
+                </div>
+                <div>
+                    <h2>PrivateDoc AI</h2>
+                    <span class="badge-tag">Zero-Leak Hub</span>
+                </div>
+            </div>
+
+            <nav class="nav-steps">
+                <div class="step-item active" data-step="1">
+                    <span class="step-num">1</span>
+                    <div class="step-info">
+                        <strong>Carica File</strong>
+                        <small>PDF, Office, Email, ZIP</small>
+                    </div>
+                </div>
+                <div class="step-item" data-step="2">
+                    <span class="step-num">2</span>
+                    <div class="step-info">
+                        <strong>Scudo Privacy</strong>
+                        <small>Anonimizzazione coerente</small>
+                    </div>
+                </div>
+                <div class="step-item" data-step="3">
+                    <span class="step-num">3</span>
+                    <div class="step-info">
+                        <strong>Elabora & Confronta</strong>
+                        <small>Gemini, ChatGPT, Claude</small>
+                    </div>
+                </div>
+                <div class="step-item" data-step="4">
+                    <span class="step-num">4</span>
+                    <div class="step-info">
+                        <strong>Report Decifrato</strong>
+                        <small>Risultati in chiaro & Export</small>
+                    </div>
+                </div>
+            </nav>
+
+            <div class="sidebar-box provider-status-card">
+                <div class="box-header">
+                    <span class="pulse-indicator"></span>
+                    <span id="activeProviderLabel">Gemini Bridge</span>
+                </div>
+                <p id="authStatusText">Pronto per l'accesso con account</p>
+                <button id="openLoginBtn" class="btn-secondary btn-sm">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                    Accedi all'Account
+                </button>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="security-badge">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    Tutti i dati reali restano in memoria locale
+                </div>
+                <a href="/guida" target="_blank" rel="noopener" class="btn-text" style="display:block; text-align:center; text-decoration:none;">📖 Guida e riferimenti normativi</a>
+                <button id="resetSessionBtn" class="btn-text">Nuova Pratica</button>
+                <button id="lockVaultBtn" class="btn-text">🔒 Blocca archivio</button>
+                <button id="quitBtn" class="btn-text">⏻ Chiudi programma</button>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header Bar -->
+            <header class="top-header">
+                <div>
+                    <h1 id="pageTitle">1. Carica i Documenti da Analizzare</h1>
+                    <p class="subtitle" id="pageSubtitle">Supporta file singoli e archivi ZIP decompressi automaticamente</p>
+                </div>
+                <div class="header-actions">
+                    <div class="provider-pill-selector">
+                        <button class="prov-pill active" data-provider="gemini">Google Gemini</button>
+                        <button class="prov-pill" data-provider="chatgpt">ChatGPT</button>
+                        <button class="prov-pill" data-provider="claude">Claude</button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Step 1: Upload View -->
+            <section id="sectionUpload" class="content-section active">
+                <div id="praticaBar" class="preflight-box ok" style="display:none; margin-top:0;">
+                    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <strong>Pratica:</strong>
+                        <input type="text" id="praticaName" maxlength="120" placeholder="Nome della pratica"
+                               style="flex:1; min-width:200px; padding:6px 10px; border-radius:6px; border:1px solid var(--border-color); background:var(--bg-base); color:var(--text-primary); font:inherit;">
+                        <span style="font-size:0.78rem; color:var(--text-secondary);">salvata in automatico, cifrata</span>
+                    </div>
+                </div>
+                <div id="casesBox" class="preflight-box" style="display:none;">
+                    <div style="font-weight:600; margin-bottom:8px; color:var(--text-primary);">📂 Pratiche salvate</div>
+                    <div id="casesList"></div>
+                </div>
+
+                <div class="upload-dropzone" id="dropzone">
+                    <input type="file" id="fileInput" multiple style="display:none;" 
+                           accept=".pdf,.docx,.doc,.odt,.xlsx,.xls,.eml,.msg,.zip,.txt,.csv">
+                    <input type="file" id="folderInput" webkitdirectory multiple style="display:none;">
+                    <div class="drop-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                    </div>
+                    <h3>Trascina qui i tuoi documenti o clicca per sfogliare</h3>
+                    <p>Puoi caricare più file, <strong>cartelle intere</strong> (con sottocartelle) e archivi <strong>.ZIP</strong></p>
+                    <p><button type="button" id="pickFolderBtn" class="btn-secondary btn-sm">📁 Scegli una cartella</button></p>
+                    <div class="format-tags">
+                        <span class="tag">📦 ZIP (Auto-estratto)</span>
+                        <span class="tag">📄 PDF (con OCR)</span>
+                        <span class="tag">✉️ Email (.MSG / .EML)</span>
+                        <span class="tag">📊 Excel (.XLSX / .XLS)</span>
+                        <span class="tag">📝 Word & ODT (.DOCX / .ODT)</span>
+                    </div>
+                </div>
+
+                <div id="skippedBox" class="preflight-box block" style="display:none;"></div>
+
+                <div class="files-container" id="filesContainer" style="display: none;">
+                    <div class="section-subhead">
+                        <h3>Documenti Acquisiti (<span id="docCount">0</span>)</h3>
+                        <button id="proceedToMaskingBtn" class="btn-primary">
+                            Procedi allo Scudo Privacy
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                        </button>
+                    </div>
+                    <div class="doc-grid" id="docGrid"></div>
+                </div>
+            </section>
+
+            <!-- Step 2: Privacy Shield & Entity Table -->
+            <section id="sectionPrivacy" class="content-section">
+                <div class="privacy-banner">
+                    <div class="banner-icon">🔒</div>
+                    <div>
+                        <h3>Pseudonimizzazione Deterministica Attiva</h3>
+                        <p>I nomi, società, date, importi e codici fiscali sono stati convertiti in token unici coerenti. Se <strong>Mario Rossi</strong> è presente in più contratti o email, è rappresentato sempre dallo stesso codice.</p>
+                    </div>
+                    <div class="stat-counter">
+                        <span class="stat-number" id="entityCount">0</span>
+                        <span class="stat-label">Dati Protetti</span>
+                    </div>
+                </div>
+
+                <div class="entity-actions-bar">
+                    <div class="search-box">
+                        <input type="text" id="entitySearch" placeholder="Cerca un nome o dato protetto...">
+                    </div>
+                    <button id="addEntityBtn" class="btn-secondary">
+                        + Aggiungi Dato da Proteggere
+                    </button>
+                    <button id="goToAnalyzeBtn" class="btn-primary">
+                        Continua con l'Elaborazione
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                    </button>
+                </div>
+
+                <div class="table-card">
+                    <table class="entity-table">
+                        <thead>
+                            <tr>
+                                <th>Dato Reale (Rilevato in locale)</th>
+                                <th>Categoria</th>
+                                <th>Token Anonimo (Trasmesso all'LLM)</th>
+                                <th>Azioni</th>
+                            </tr>
+                        </thead>
+                        <tbody id="entityTableBody">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Step 3: Analysis & Prompt -->
+            <section id="sectionAnalyze" class="content-section">
+                <div class="prompt-grid">
+                    <div class="prompt-builder-card">
+                        <h3>Istruzioni per l'Analisi o Traduzione Giuridica</h3>
+                        <p class="card-desc">Specifica il quesito per il modello (es. eccezioni preliminari e di rito, merito, calcolo termini) oppure richiedi una traduzione legale confidenziale (es. dall'inglese all'italiano o viceversa):</p>
+
+                        <div id="docSelector" class="preflight-box" style="display:none; margin-top:0;"></div>
+
+                        <textarea id="userInstructionInput" rows="5" placeholder="Inserisci qui il quesito o le istruzioni legali (es. 'Traduci questo contratto in italiano con terminologia forense' oppure 'Individua le eccezioni preliminari e i profili probatori critici'). Lascia vuoto per l'analisi approfondita predefinita."></textarea>
+
+                        <div id="preflightBox" class="preflight-box" style="display:none;"></div>
+
+                        <div class="execution-footer">
+                            <div class="execution-provider-info">
+                                <span class="dot-online"></span>
+                                Invio protetto tramite: <strong id="execProviderName">Google Gemini</strong>
+                            </div>
+                            <div class="action-buttons">
+                                <button id="previewPromptBtn" class="btn-secondary">Ispeziona Prompt Anonimo</button>
+                                <button id="runAnalysisBtn" class="btn-primary btn-lg">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                    Avvia Elaborazione Protetta
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Manual Fallback Card (Guaranteed working even if browser bridge is not logged in) -->
+                    <div class="fallback-card">
+                        <div class="fallback-header">
+                            <h4>📋 Modalità Copia & Decifra (Zero Installazioni)</h4>
+                            <span class="badge-tag">Opzione 100% Sempre Disponibile</span>
+                        </div>
+                        <p>Preferisci incollare direttamente nella tua finestra aperta di Gemini o ChatGPT?</p>
+                        <button id="copyMaskedPromptBtn" class="btn-outline btn-sm">
+                            1. Copia Testo Anonimizzato
+                        </button>
+                        <div class="paste-zone">
+                            <label>2. Incolla qui la risposta che ti ha dato l'LLM:</label>
+                            <textarea id="manualResponseInput" rows="3" placeholder="Incolla qui la risposta dell'LLM contenente [PERSONA_1], [SOCIETA_A]..."></textarea>
+                            <button id="manualDeanonymizeBtn" class="btn-secondary btn-sm">
+                                3. Decifra Istantaneamente
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Prompt Inspector Modal -->
+                <div class="modal" id="promptModal" style="display:none;">
+                    <div class="modal-dialog">
+                        <div class="modal-header">
+                            <h3>Ispezione Testo Inviato (Dimostrazione Privacy)</h3>
+                            <button class="close-btn" id="closeModalBtn">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="modal-desc">Ecco l'esatto contenuto che verrà trasmesso: tutti i riferimenti a persone, conti, contratti e importi sono stati mascherati.</p>
+                            <p class="modal-desc" style="font-size:0.8rem;">💡 Manca qualcosa? Seleziona una parola o una frase nel testo e premi il <strong>tasto destro</strong> per mascherarla.</p>
+                            <pre id="maskedPromptPreview" class="code-box"></pre>
+                            <div id="maskContextMenu" class="ctx-menu" style="display:none;">
+                                <div class="ctx-title">Maschera come:</div>
+                                <button type="button" data-category="PERSONA">👤 Persona</button>
+                                <button type="button" data-category="SOCIETA">🏢 Società / Ente</button>
+                                <button type="button" data-category="RISERVATO">🔒 Altro dato riservato</button>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn-primary" id="copyModalPromptBtn">Copia Testo</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Step 4: Results & De-anonymized Viewer -->
+            <section id="sectionResult" class="content-section">
+                <div class="result-header-card">
+                    <div>
+                        <h2>Esito dell'Analisi</h2>
+                        <p class="card-desc">Tutti i riferimenti reali sono stati ripristinati in locale con precisione.</p>
+                    </div>
+                    <div class="view-mode-toggle">
+                        <span class="toggle-label">Modalità:</span>
+                        <button class="toggle-btn active" id="viewDecryptedBtn">Dati Reali Ripristinati</button>
+                        <button class="toggle-btn" id="viewMaskedBtn">Versione Anonima (LLM)</button>
+                    </div>
+                </div>
+
+                <div class="result-box-card">
+                    <div class="result-content" id="resultOutput">
+                        <!-- Filled by response -->
+                    </div>
+                </div>
+
+                <div class="export-bar">
+                    <button id="downloadWordBtn" class="btn-primary">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        Scarica Report Word (.docx)
+                    </button>
+                    <button id="copyResultBtn" class="btn-secondary">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        Copia Testo Risultato
+                    </button>
+                    <button id="newAnalysisBtn" class="btn-outline">
+                        Altra Domanda su questi File
+                    </button>
+                </div>
+            </section>
+
+            <!-- Loading Overlay -->
+            <div id="loadingOverlay" class="loading-overlay" style="display:none;">
+                <div class="loader-card">
+                    <div class="spinner"></div>
+                    <h3 id="loadingTitle">Elaborazione in corso...</h3>
+                    <p id="loadingMsg">Estrazione documenti ed esecuzione protetta</p>
+                    <div id="loadingProgress" style="display:none; width:100%; margin-top:12px;">
+                        <div style="height:8px; border-radius:4px; background:var(--bg-base); overflow:hidden;">
+                            <div id="loadingBar" style="height:100%; width:0%; background:var(--primary); transition:width 0.3s;"></div>
+                        </div>
+                        <p id="loadingCounter" style="margin-top:8px; font-size:0.85rem; color:var(--text-secondary);"></p>
+                        <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:10px;">
+                            <button type="button" id="loadingCancelBtn" class="btn-secondary btn-sm">Interrompi e tieni quanto caricato</button>
+                            <button type="button" id="loadingDiscardBtn" class="btn-secondary btn-sm">Interrompi e scarta</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Manual Add Entity Modal -->
+    <div class="modal" id="addEntityModal" style="display:none;">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3>Aggiungi un Dato da Proteggere</h3>
+                <button class="close-btn" id="closeAddModalBtn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Testo o Nome da Mascherare:</label>
+                    <input type="text" id="customEntityText" placeholder="Es. Ing. Carlo Bianchi o Fornitura Alfa">
+                </div>
+                <div class="form-group">
+                    <label>Categoria:</label>
+                    <select id="customEntityCategory">
+                        <option value="PERSONA">Persona</option>
+                        <option value="SOCIETA">Società / Ente</option>
+                        <option value="IMPORTO">Importo Economico</option>
+                        <option value="DATA">Data</option>
+                        <option value="INDIRIZZO">Indirizzo</option>
+                        <option value="CODICE_FISCALE">Identificativo Fiscale</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-primary" id="saveCustomEntityBtn">Conferma e Maschera</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="vaultModal" style="display:none; z-index:2000;">
+        <div class="modal-dialog" style="max-width:520px;">
+            <div class="modal-header"><h3 id="vaultTitle"></h3></div>
+            <div class="modal-body" id="vaultBody"></div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

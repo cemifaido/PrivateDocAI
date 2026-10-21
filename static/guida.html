@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PrivateDoc AI – Guida e riferimenti</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        body { display: block; overflow: auto; height: auto; }
+        .guide { max-width: 920px; margin: 0 auto; padding: 32px 20px 80px; line-height: 1.6; color: var(--text-secondary); }
+        .guide h1 { color: var(--text-primary); font-size: 1.9rem; margin-bottom: 4px; }
+        .guide h2 { color: var(--text-primary); font-size: 1.25rem; margin: 34px 0 10px; padding-top: 10px; border-top: 1px solid var(--border-color); }
+        .guide h3 { color: var(--text-primary); font-size: 1rem; margin: 18px 0 6px; }
+        .guide p, .guide li { font-size: 0.95rem; }
+        .guide ol, .guide ul { padding-left: 22px; margin: 6px 0 10px; }
+        .guide a { color: var(--accent-cyan); }
+        .guide strong { color: var(--text-primary); }
+        .box { padding: 12px 16px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--bg-surface); margin: 12px 0; }
+        .box.warn { border-color: var(--accent-amber); }
+        .box.ok { border-color: var(--accent-emerald); }
+        .box.stop { border-color: var(--accent-rose); }
+        table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 0.88rem; }
+        th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--border-color); }
+        th { color: var(--text-primary); background: var(--bg-surface); }
+        code { background: var(--bg-surface); padding: 1px 6px; border-radius: 4px; font-family: var(--font-mono); font-size: 0.85em; }
+        .token { color: var(--accent-cyan); }
+        .back { display: inline-block; margin-bottom: 14px; }
+        .small { font-size: 0.82rem; color: var(--text-muted); }
+        @media (max-width: 700px) { table, thead, tbody, tr, th, td { display: block; } th { display: none; } td { border: none; padding: 3px 0; } tr { border-bottom: 1px solid var(--border-color); padding: 8px 0; } }
+    </style>
+</head>
+<body>
+<main class="guide">
+    <a class="back" href="/">← Torna all'applicazione</a>
+    <h1>🛡️ PrivateDoc AI – Guida rapida e riferimenti</h1>
+    <p class="small">Vademecum per l'uso e quadro normativo che ha guidato la progettazione. Aggiornato al 21 ottobre 2026 (revisione critica del 21/10/2026).</p>
+
+    <div class="box stop">
+        <strong>Prima di tutto.</strong> Questo programma <strong>riduce il rischio</strong>, non lo elimina. Sostituire i nomi con dei codici
+        è una <em>pseudonimizzazione</em>, non una anonimizzazione: per il GDPR i dati pseudonimizzati restano dati personali.
+        La responsabilità di cosa si invia, a chi e con quale base giuridica resta sempre di chi usa il programma.
+    </div>
+
+    <h2>1. A cosa serve</h2>
+    <p>Permette di far analizzare o tradurre a un modello linguistico (Gemini, ChatGPT, Claude) atti, contratti, email e fogli di calcolo
+    <strong>cercando di non mandare fuori dal computer i nomi, i codici e gli importi che il programma riconosce</strong>. Il testo viene mascherato in locale,
+    il modello lavora sul testo mascherato e la risposta viene ricomposta in locale con i dati veri. Il riconoscimento è <strong>euristico</strong> (a regole): non è infallibile
+    e <strong>serve sempre la verifica di una persona</strong> sul testo che sta per uscire.</p>
+
+    <h2>2. Come si usa, passo per passo</h2>
+    <ol>
+        <li><strong>Password (solo la prima volta).</strong> Scegli una password per l'archivio (almeno 12 caratteri, meglio una frase lunga) e <strong>annotala</strong>: non si può recuperare.
+            Serve ad aprire le pratiche salvate.</li>
+        <li><strong>Carica.</strong> Trascina file, <strong>cartelle intere</strong> o archivi ZIP (anche con sottocartelle). Formati letti: PDF (anche scansionati, con OCR),
+            Word, ODT, Excel, email (.eml/.msg), testo. Se carichi molti file vedi un contatore con i file mancanti e il pulsante «Interrompi».
+            I file di tipo non previsto (per esempio foto) <strong>non vengono considerati</strong>: compaiono in un riquadro rosso con nome, percorso e motivo.</li>
+        <li><strong>Scudo Privacy.</strong> Controlla la tabella dei dati riconosciuti (persone, società, codici fiscali, partite IVA, IBAN, email, telefoni, indirizzi, date, importi, carte, targhe).
+            Ogni dato riceve un codice sempre uguale in tutti i documenti (per esempio <span class="token">[PERSONA_1]</span>), così il modello può confrontare i documenti senza sapere chi sono le parti.
+            Puoi correggere, togliere o aggiungere dati a mano.</li>
+        <li><strong>Elabora.</strong> Scrivi la richiesta. Prima dell'invio usa «Ispeziona Prompt Anonimo»: è <em>esattamente</em> il testo che uscirà.
+            Se manca qualcosa, <strong>seleziona il testo e premi il tasto destro</strong> per mascherarlo come Persona, Società o dato riservato.
+            Il riquadro di controllo segnala i dati riconosciuti ancora in chiaro (l'invio e la copia si bloccano) e le parole sospette: prima di inviare o copiare ti viene chiesta una conferma esplicita.</li>
+        <li><strong>Invia.</strong> Con <strong>Gemini</strong> l'invio è automatico (serve Google Chrome e il login una volta). Con <strong>ChatGPT</strong> e <strong>Claude</strong> si usa
+            «Copia &amp; Decifra»: copi il testo anonimo, lo incolli nella chat, poi incolli la risposta nel programma.</li>
+        <li><strong>Risultato.</strong> La risposta torna con i dati reali. Puoi vedere la versione decifrata e quella anonima, scaricare il report Word o fare altre domande sugli stessi documenti.</li>
+        <li><strong>Pratiche.</strong> Ogni lavoro si salva da solo, <strong>cifrato</strong>, e si riapre anche dopo aver riavviato il PC dall'elenco «Pratiche salvate» (con la password).
+            «Blocca archivio» richiede di nuovo la password. Prima di distribuire il programma a un'altra persona cancella la cartella <code>data</code>.</li>
+    </ol>
+
+    <h2>3. Cosa fa e cosa non fa</h2>
+    <table>
+        <thead><tr><th>Il programma…</th><th>…ma attenzione</th></tr></thead>
+        <tbody>
+        <tr><td>Rileva e maschera nomi, società, identificativi, importi, date, indirizzi, contatti.</td>
+            <td>Il rilevamento è <strong>a regole</strong>, non è infallibile: nomi insoliti, sigle o dati scritti in modo anomalo possono sfuggire. Rileggi sempre il testo anonimo.</td></tr>
+        <tr><td>Usa lo stesso codice per la stessa entità in tutti i documenti.</td>
+            <td>Un cognome condiviso da due persone resta in chiaro e viene segnalato, per non attribuire frasi alla persona sbagliata.</td></tr>
+        <tr><td>Non invia i nomi dei file e degli archivi: il modello vede solo «Documento 1 [PDF]».</td>
+            <td>Il <em>contenuto</em> dei fatti (circostanze, luoghi, ruoli, importi rotondi, date non riconosciute) può comunque identificare le persone per chi conosce il caso.</td></tr>
+        <tr><td>Ripristina i dati veri in locale.</td>
+            <td>Le pagine scansionate sono lette con l'OCR: gli errori di lettura possono lasciare un nome in una forma non riconosciuta.</td></tr>
+        <tr><td>Cifra le pratiche salvate (AES-256-GCM, chiave derivata dalla password) e lega ogni file alla propria pratica.</td>
+            <td>I cookie di accesso dei browser (cartella <code>profiles</code>) <strong>non</strong> sono cifrati dal programma. Se dimentichi la password, le pratiche sono perse.
+                Chi può sostituire i file con una <em>copia più vecchia</em> della stessa pratica non verrebbe riconosciuto: proteggi la cartella <code>data</code> con i permessi di Windows e con i tuoi backup.</td></tr>
+        </tbody>
+    </table>
+
+    <h2>4. Il provider dell'intelligenza artificiale</h2>
+    <ul>
+        <li>Il testo mascherato <strong>esce comunque dal computer</strong> verso il servizio scelto. Verifica le condizioni d'uso e le impostazioni dell'account (addestramento sui dati, conservazione, account personale o aziendale) prima di inviare materiale di un cliente.</li>
+        <li>ChatGPT e Claude <strong>non possono essere pilotati dal programma</strong>: i loro siti bloccano i browser automatici. Il programma non cerca di aggirare questi controlli.</li>
+        <li>La risposta del modello può contenere errori o dati inventati: va sempre verificata prima di usarla.</li>
+    </ul>
+
+    <h2>5. Riferimenti normativi e tecnici</h2>
+    <p>Ordine: prima le fonti che hanno ispirato le scelte del programma, poi gli obblighi che restano a carico dell'utente.
+    I testi vanno consultati nella <strong>versione vigente</strong> sui siti ufficiali; l'elenco è un aiuto, non un parere legale.</p>
+
+    <table>
+        <thead><tr><th>Riferimento</th><th>Perché conta</th><th>Come ha influito sul programma</th></tr></thead>
+        <tbody>
+        <tr>
+            <td><strong>Regolamento (UE) 2016/679 (GDPR)</strong><br>art. 4 n. 5, considerando 26<br>
+                <a href="https://eur-lex.europa.eu/eli/reg/2016/679/oj" target="_blank" rel="noopener">EUR-Lex</a></td>
+            <td>Definisce la pseudonimizzazione e chiarisce che i dati pseudonimizzati restano dati personali se possono essere ricondotti a una persona con informazioni aggiuntive.</td>
+            <td>Il programma si presenta come strumento di riduzione del rischio, non di anonimizzazione. Le informazioni per risalire ai dati reali (la mappa dei codici) restano solo sul computer, cifrate.</td></tr>
+        <tr>
+            <td><strong>GDPR art. 5 par. 1 lett. c) ed f)</strong><br>minimizzazione, integrità e riservatezza</td>
+            <td>Si trattano solo i dati necessari e con sicurezza adeguata.</td>
+            <td>Maschera i dati riconosciuti prima dell'invio, non trasmette i nomi dei file, permette di scegliere quali documenti includere e di togliere o aggiungere dati prima di inviare.</td></tr>
+        <tr>
+            <td><strong>GDPR art. 25 e art. 32 par. 1 lett. a)</strong><br>protezione dei dati fin dalla progettazione; misure di sicurezza (pseudonimizzazione e cifratura)</td>
+            <td>Indicano pseudonimizzazione e cifratura tra le misure tecniche adeguate.</td>
+            <td>Pseudonimizzazione automatica, controllo pre-invio che blocca l'uscita dei dati riconosciuti ancora in chiaro e chiede conferma per le parole sospette, archivio cifrato con password, blocco dell'archivio.</td></tr>
+        <tr>
+            <td><strong>Linee guida EDPB 01/2025 sulla pseudonimizzazione</strong><br>
+                <a href="https://www.edpb.europa.eu/documents/guideline/guidelines-012025-on-pseudonymisation_en" target="_blank" rel="noopener">Pagina ufficiale EDPB</a></td>
+            <td>Chiariscono quando la pseudonimizzazione riduce davvero i rischi: separazione delle informazioni aggiuntive, coerenza dei pseudonimi, valutazione di chi può re-identificare.
+                <span class="small">«Versione 1» adottata il 16 gennaio 2025 per la consultazione pubblica, ora chiusa. Al 21/10/2026 la pagina ufficiale elenca ancora solo questa versione: il testo potrebbe essere modificato in quella definitiva.</span></td>
+            <td>Mappa dei codici custodita in locale e cifrata, codice identico per la stessa entità in tutti i documenti, verifica di ciò che resta in chiaro prima dell'invio.</td></tr>
+        <tr>
+            <td><strong>Parere WP29 05/2014 sulle tecniche di anonimizzazione (WP216)</strong><br>
+                <a href="https://ec.europa.eu/justice/article-29/documentation/opinion-recommendation/files/2014/wp216_en.pdf" target="_blank" rel="noopener">Testo</a></td>
+            <td>Spiega perché sostituire gli identificatori diretti non basta: restano i rischi di individuazione, collegamento e deduzione.</td>
+            <td>Avvisi su fatti e circostanze che possono identificare, segnalazione dei termini sospetti, divieto di presentare il risultato come «anonimo».</td></tr>
+        <tr>
+            <td><strong>Codice in materia di protezione dei dati personali</strong> (D.Lgs. 196/2003, come modificato dal D.Lgs. 101/2018)<br>
+                <a href="https://www.normattiva.it/uri-res/N2Ls?urn:nir:stato:decreto.legislativo:2003-06-30;196" target="_blank" rel="noopener">Normattiva</a></td>
+            <td>Disciplina nazionale che integra il GDPR.</td>
+            <td>Riconoscimento dei dati identificativi italiani (codice fiscale, partita IVA, IBAN, targhe, telefoni).</td></tr>
+        <tr>
+            <td><strong>Codice deontologico forense, art. 28</strong> («Riserbo e segreto professionale»)<br>
+                <a href="https://www.consiglionazionaleforense.it/codice-deontologico" target="_blank" rel="noopener">Consiglio Nazionale Forense</a></td>
+            <td>Dovere deontologico: riguarda le informazioni ricevute dal cliente e apprese in ragione del mandato, e permane dopo la sua conclusione. La violazione ha rilievo disciplinare.</td>
+            <td>Pensato per chi lavora su atti riservati: i dati riconosciuti non lasciano il computer in chiaro e il testo che esce si può ispezionare e correggere.
+                <span class="small">Per le altre professioni regolamentate si applicano i rispettivi codici deontologici.</span></td></tr>
+        <tr>
+            <td><strong>Codice penale, art. 622</strong> (rivelazione di segreto professionale)<br>
+                <a href="https://www.normattiva.it/uri-res/N2Ls?urn:nir:stato:regio.decreto:1930-10-19;1398" target="_blank" rel="noopener">Normattiva (Codice penale)</a></td>
+            <td>Punisce, a querela, chi rivela senza giusta causa un segreto appreso per ragione della propria professione, se ne può derivare nocumento. È una norma penale distinta dal codice deontologico.</td>
+            <td>Stessa impostazione della riga precedente. Se un dato sfugge al riconoscimento e viene inviato, la responsabilità resta di chi usa il programma.</td></tr>
+        <tr>
+            <td><strong>Legge 23 settembre 2025, n. 132</strong> (disposizioni sull'intelligenza artificiale), art. 13 sulle professioni intellettuali<br>
+                <a href="https://www.gazzettaufficiale.it/eli/id/2025/09/25/25G00143/SG" target="_blank" rel="noopener">Gazzetta Ufficiale n. 223 del 25/09/2025</a> ·
+                <a href="https://www.normattiva.it/uri-res/N2Ls?urn:nir:stato:legge:2025-09-23;132" target="_blank" rel="noopener">Normattiva</a></td>
+            <td>In vigore dal 10 ottobre 2025. L'art. 13 prevede che nelle professioni intellettuali l'uso di sistemi di IA sia limitato ad attività strumentali e di supporto, e che il professionista ne informi il cliente in modo chiaro, semplice ed esaustivo.
+                <span class="small">La responsabilità professionale per il lavoro svolto resta comunque in capo al professionista (principio generale, non una frase dell'art. 13).</span></td>
+            <td>La risposta del modello è solo una bozza da verificare. L'informativa al cliente <strong>non</strong> è gestita dal programma.</td></tr>
+        <tr>
+            <td><strong>Regolamento (UE) 2024/1689 (AI Act)</strong><br>
+                <a href="https://eur-lex.europa.eu/eli/reg/2024/1689/oj" target="_blank" rel="noopener">EUR-Lex</a></td>
+            <td>Quadro europeo sull'IA: richiede, tra l'altro, un livello adeguato di conoscenza dello strumento a chi lo usa.</td>
+            <td>Questa guida e l'ispezione del testo inviato servono anche a rendere l'uso consapevole.</td></tr>
+        </tbody>
+    </table>
+
+    <div class="box warn">
+        <strong>Obblighi che restano all'utente (non gestiti dal programma)</strong>
+        <ul>
+            <li>Individuare la <strong>base giuridica</strong> del trattamento e informare gli interessati/clienti; per l'uso dell'IA nelle professioni, valutare l'informativa prevista dalla L. 132/2025.</li>
+            <li>Verificare i <strong>contratti e le condizioni</strong> del fornitore di IA (ruolo di responsabile del trattamento, art. 28 GDPR, uso dei dati per l'addestramento) e i <strong>trasferimenti extra-UE</strong> (artt. 44-49 GDPR).</li>
+            <li>Valutare se serve una <strong>valutazione d'impatto</strong> (DPIA, art. 35 GDPR) e aggiornare il registro dei trattamenti.</li>
+            <li>Conservare la password e i profili del browser in modo sicuro, e custodire le pratiche secondo le regole del proprio studio.</li>
+            <li>Controllare sempre il risultato del modello prima di usarlo.</li>
+        </ul>
+    </div>
+
+    <h2>6. Come sono state verificate le fonti</h2>
+    <p class="small">Il 21 ottobre 2026 sono stati verificati, sulle pagine ufficiali, lo stato delle linee guida EDPB 01/2025 («versione 1», consultazione chiusa) e gli estremi della L. 132/2025
+    (Gazzetta Ufficiale n. 223 del 25/09/2025), e si è controllato che i collegamenti indicati rispondano. Il contenuto dell'art. 13 L. 132/2025 è stato controllato da una revisione tecnica sul testo in Gazzetta Ufficiale (non da un giurista);
+    per l'art. 28 del codice deontologico forense e per l'art. 622 c.p. ci si è basati su commenti e su fonti secondarie: <strong>conferma sempre i dettagli sul testo vigente prima di farvi affidamento</strong>.
+    Questa guida non costituisce consulenza legale e il suo disclaimer non rende precise le affermazioni tecniche: il rilevamento dei dati resta approssimativo.</p>
+
+    <p><a href="/">← Torna all'applicazione</a></p>
+</main>
+</body>
+</html>
