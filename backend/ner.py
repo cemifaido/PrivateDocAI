@@ -278,11 +278,13 @@ class NerDetector:
             if not ok:
                 self._failure = "i file del modello non corrispondono a quelli verificati: non usato"
 
-    def _wait_verified(self) -> bool:
+    def _wait_verified(self, cancel: Optional[threading.Event] = None) -> bool:
         self.start_verification()
         thread = self._verify_thread
-        if thread is not None:
-            thread.join()
+        while thread is not None and thread.is_alive():
+            thread.join(0.2)      # wake up often enough to honour a cancel during the hashing
+            if cancel is not None and cancel.is_set():
+                return False
         return bool(self._verified)
 
     # ----- state shown to the user -----
@@ -293,10 +295,10 @@ class NerDetector:
         elif self._failure:
             state = "rejected" if self._verified is False else "error"
             reason = self._failure
-        elif self._verified is None:
-            state, reason = "verifying", "verifica dei file in corso"
         elif not self.enabled:
             state, reason = "off", "disattivato dalle impostazioni"
+        elif self._verified is None:
+            state, reason = "verifying", "verifica dei file in corso"
         else:
             state, reason = "ready", "attivo"
         usable = state in ("ready", "off")
@@ -336,9 +338,13 @@ class NerDetector:
         Candidates [{"raw", "category", "score"}]. [] when the model is not usable, when it fails
         (ALL partial results are dropped and the failure becomes visible) or when cancelled.
         """
-        if self._backend is None and not self._wait_verified():
+        if not self.enabled:
+            return []             # switched off: never wait for a check that would not be used
+        if self._backend is None and not self._wait_verified(cancel):
             return []
-        if not self.enabled or not self._load():
+        if cancel is not None and cancel.is_set():
+            return []
+        if not self._load():
             return []
         extended = self.extended  # snapshot: a toggle during the run applies from the next one
         try:

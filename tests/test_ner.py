@@ -383,6 +383,44 @@ class TestModelThroughTheApi(unittest.TestCase):
         self.assertEqual(up["documents"][0]["model"], "rifiutato")
         self.assertEqual(self.client.get("/api/ner/status").json()["state"], "rejected")
 
+    def test_a_cancel_during_the_hashing_does_not_wait_for_the_end_of_the_check(self):
+        import hashlib
+        import threading
+        import time
+        from backend import ner as ner_module
+        gate = threading.Event()
+        real_hash = ner_module.sha256_of
+        ner_module.sha256_of = lambda path: (gate.wait(10), real_hash(path))[1]
+        try:
+            detector = self._detector_over_files(b"x", hashlib.sha256(b"x").hexdigest())
+            cancel = threading.Event()
+            threading.Timer(0.3, cancel.set).start()
+            started = time.time()
+            self.assertEqual(detector.detect("Testimone Colombo Anna Maria.", cancel=cancel), [])
+            self.assertLess(time.time() - started, 3)        # returned long before the 10 s of hashing
+        finally:
+            gate.set()
+            ner_module.sha256_of = real_hash
+
+    def test_a_model_switched_off_during_the_verification_is_off_and_never_waited_for(self):
+        import hashlib
+        import threading
+        import time
+        from backend import ner as ner_module
+        gate = threading.Event()
+        real_hash = ner_module.sha256_of
+        ner_module.sha256_of = lambda path: (gate.wait(10), real_hash(path))[1]
+        try:
+            detector = self._detector_over_files(b"x", hashlib.sha256(b"x").hexdigest())
+            detector.enabled = False
+            self.assertEqual(detector.status()["state"], "off")
+            started = time.time()
+            self.assertEqual(detector.detect("Testimone Colombo Anna Maria."), [])
+            self.assertLess(time.time() - started, 3)
+        finally:
+            gate.set()
+            ner_module.sha256_of = real_hash
+
     def test_a_failure_wins_over_a_backend_loaded_before_it(self):
         detector = NerDetector(backend=FakeBackend({}), expected_sha256=None)
         detector._failure = "RuntimeError: memoria esaurita"
