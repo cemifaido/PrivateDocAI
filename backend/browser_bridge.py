@@ -1,6 +1,7 @@
 import os
 import time
 import threading
+import traceback
 import webbrowser
 from typing import Optional, Dict, Any
 from playwright.sync_api import sync_playwright
@@ -56,6 +57,7 @@ class BrowserBridge:
         self._lock = threading.Lock()
         self._login_threads: Dict[str, threading.Thread] = {}
         self.login_headless = False  # tests only
+        self._notices: Dict[str, str] = {}   # provider -> why the automatic login cannot work (this run only)
 
     @staticmethod
     def _browser_kwargs() -> Dict[str, Any]:
@@ -90,6 +92,10 @@ class BrowserBridge:
                             "«Copia & Decifra» per incollare il testo anonimo e la risposta.")
             }
 
+        self._notices.pop(provider, None)
+        opened = threading.Event()
+        outcome: Dict[str, Any] = {"error": None}
+
         def _run_login():
             context = None
             try:
@@ -104,6 +110,7 @@ class BrowserBridge:
                     closed = []
                     context.on("close", lambda *_: closed.append(True))
                     page = context.new_page()
+                    opened.set()          # the window exists: the caller can answer "open"
                     page.goto(target_url, wait_until="domcontentloaded")
 
                     # Keep open until the user closes the window. wait_for_timeout (not
@@ -111,9 +118,20 @@ class BrowserBridge:
                     # otherwise this loop never ends and the profile stays marked as busy.
                     while not closed and context.pages:
                         context.pages[0].wait_for_timeout(500)
-            except Exception:
-                pass
+                        # Google refuses sign-in in a browser driven by automation: say so and hand over to the
+                        # user's normal browser (the program does not try to hide that it is automated)
+                        if any(self.GOOGLE_REJECTED in pg.url for pg in context.pages):
+                            self._notices[provider] = (
+                                f"{self.PROVIDERS[provider]['name']} non consente l'accesso tramite il browser "
+                                "automatico: usa «Copia & Decifra» con il tuo browser normale.")
+                            webbrowser.open(target_url)
+                            break
+            except Exception as exc:
+                # never swallowed in silence: the user is told why no window appeared
+                outcome["error"] = exc
+                traceback.print_exc()
             finally:
+                opened.set()
                 try:
                     if context is not None:
                         context.close()
@@ -123,10 +141,17 @@ class BrowserBridge:
         t = threading.Thread(target=_run_login, daemon=True)
         self._login_threads[provider] = t
         t.start()
+        opened.wait(timeout=40)
+        if outcome["error"] is not None:
+            detail = (str(outcome["error"]).strip().splitlines() or [type(outcome["error"]).__name__])[0][:250]
+            return {"status": "error",
+                    "message": f"Non sono riuscito ad aprire la finestra del browser: {detail}"}
         return {
             "status": "success", 
             "message": f"Finestra di login aperta per {self.PROVIDERS[provider]['name']}. Accedi con il tuo account, poi chiudi la finestra del browser per salvare la sessione!"
         }
+
+    GOOGLE_REJECTED = "accounts.google.com/v3/signin/rejected"
 
     def _login_window_open(self, provider: str) -> bool:
         t = self._login_threads.get(provider)
@@ -149,6 +174,9 @@ class BrowserBridge:
             # no automated visit: those sites reject automated browsers anyway
             return {"logged_in": False, "provider": provider, "state": "manual",
                     "message": f"{self.PROVIDERS[provider]['name']}: uso manuale. Usa «Copia & Decifra»."}
+        if provider in self._notices:
+            return {"logged_in": False, "provider": provider, "state": "blocked",
+                    "message": self._notices[provider]}
         if self._login_window_open(provider):
             return {"logged_in": False, "provider": provider, "state": "login_open",
                     "message": "Finestra di login aperta: chiudila dopo l'accesso, poi ricontrolla."}

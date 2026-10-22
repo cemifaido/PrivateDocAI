@@ -560,6 +560,73 @@ class TestFullPrivateDocSuite(unittest.TestCase):
             )
         self.assertEqual(response.status_code, 413)
 
+class TestLoginWindowReportsFailures(unittest.TestCase):
+    def test_a_browser_that_cannot_start_is_reported_with_the_cause(self):
+        import tempfile
+        from unittest import mock
+        from backend import browser_bridge
+        bridge = browser_bridge.BrowserBridge(base_profile_dir=tempfile.mkdtemp())
+
+        def broken(*args, **kwargs):
+            raise RuntimeError("Executable doesn't exist at C:/chrome.exe")
+
+        with mock.patch.object(browser_bridge, "sync_playwright", broken):
+            result = bridge.open_login_window("gemini")
+        self.assertEqual(result["status"], "error")
+        self.assertIn("Executable doesn't exist", result["message"])
+
+
+class TestGoogleRejectsTheAutomatedBrowser(unittest.TestCase):
+    def test_the_rejection_page_closes_the_window_opens_the_normal_browser_and_is_reported(self):
+        import tempfile
+        from unittest import mock
+        from backend import browser_bridge
+
+        class Page:
+            url = "https://accounts.google.com/v3/signin/rejected?continue=x"
+
+            def wait_for_timeout(self, _ms):
+                pass
+
+            def goto(self, *args, **kwargs):
+                pass
+
+        class Context:
+            def __init__(self):
+                self.pages = [Page()]
+                self.closed = False
+
+            def on(self, *args):
+                pass
+
+            def new_page(self):
+                return self.pages[0]
+
+            def close(self):
+                self.closed = True
+
+        context = Context()
+
+        class Playwright:
+            chromium = mock.Mock(launch_persistent_context=mock.Mock(return_value=context))
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        bridge = browser_bridge.BrowserBridge(base_profile_dir=tempfile.mkdtemp())
+        with mock.patch.object(browser_bridge, "sync_playwright", lambda: Playwright()),                 mock.patch.object(browser_bridge.webbrowser, "open") as opened:
+            bridge.open_login_window("gemini")
+            bridge._login_threads["gemini"].join(10)
+        opened.assert_called_once()
+        self.assertTrue(context.closed)
+        status = bridge.check_login_status("gemini")
+        self.assertEqual(status["state"], "blocked")
+        self.assertIn("Copia", status["message"])
+
+
 class TestVaultAndSavedCases(unittest.TestCase):
 
     def setUp(self):
