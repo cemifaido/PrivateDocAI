@@ -1,5 +1,6 @@
 import hmac
 import os
+import re
 import secrets
 from typing import List, Optional, Dict
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
@@ -302,6 +303,26 @@ async def remove_entity(data: EntityRemove):
         doc_service.persist(data.session_id)
         return {"status": "success", "entities": anonymizer.get_registry()}
 
+@app.get("/api/categories")
+async def list_categories():
+    return doc_service.list_categories()
+
+class CategoryCreate(BaseModel):
+    name: str
+
+@app.post("/api/categories")
+async def create_category(data: CategoryCreate):
+    try:
+        ident = doc_service.add_category(data.name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"id": ident, **doc_service.list_categories()}
+
+def _checked_category(category: str) -> str:
+    if not re.fullmatch(r"[A-Z]+(?:_[A-Z]+)*", category or "") or not 2 <= len(category) <= 30:
+        raise HTTPException(status_code=400, detail="Categoria non valida.")
+    return category
+
 class EntityAdd(BaseModel):
     session_id: str
     text: str
@@ -312,7 +333,7 @@ async def add_entity(data: EntityAdd):
     with doc_service.state_lock:
         session = doc_service.get_or_create_session(data.session_id)
         anonymizer = session["anonymizer"]
-        token = anonymizer.add_custom_entity(data.text, data.category)
+        token = anonymizer.add_custom_entity(data.text, _checked_category(data.category))
         doc_service.persist(data.session_id)
         return {"status": "success", "token": token, "entities": anonymizer.get_registry()}
 
@@ -361,7 +382,7 @@ async def quick_protect(data: QuickProtectRequest):
         if data.action == "IGNORE":
             anonymizer.whitelist.add(data.term.lower().rstrip('.,;:'))
         else:
-            anonymizer.add_custom_entity(data.term, data.action)
+            anonymizer.add_custom_entity(data.term, _checked_category(data.action))
         doc_service.persist(data.session_id)
         return {
             "status": "success",

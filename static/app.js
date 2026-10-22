@@ -441,7 +441,16 @@ function setupEventListeners() {
     });
 
     // Custom Entity Modal
-    addEntityBtn.addEventListener('click', () => {
+    addEntityBtn.addEventListener('click', async () => {
+        const lib = await loadCategories();
+        const select = document.getElementById('customEntityCategory');
+        select.textContent = '';
+        for (const c of [...lib.presets, ...lib.custom]) {
+            const option = document.createElement('option');
+            option.value = c.id;
+            option.textContent = (lib.custom.includes(c) ? '★ ' : '') + c.label;
+            select.appendChild(option);
+        }
         addEntityModal.style.display = 'flex';
     });
     closeAddModalBtn.addEventListener('click', () => addEntityModal.style.display = 'none');
@@ -1224,6 +1233,124 @@ async function refreshPreflight() {
 // Right-click on selected text in the prompt preview: mask it as a chosen category
 let pendingMaskText = "";
 
+// ---------- Category picker: the program's categories plus the user's own, with a fuzzy search ----------
+const FALLBACK_CATEGORIES = {
+    presets: [{id: 'PERSONA', label: 'Persona'}, {id: 'SOCIETA', label: 'Società / Ente'},
+              {id: 'RISERVATO', label: 'Altro dato riservato'}],
+    custom: [],
+};
+let categoryLibrary = FALLBACK_CATEGORIES;
+
+async function loadCategories() {
+    try {
+        const resp = await fetch('/api/categories');
+        if (resp.ok) categoryLibrary = await resp.json();
+    } catch { /* keep the last known list */ }
+    return categoryLibrary;
+}
+
+function plainText(text) {
+    return (text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+// Subsequence match ("prot" -> "Numero di protocollo"); higher is better, -1 means no match
+function fuzzyScore(query, label) {
+    const q = plainText(query).replace(/\s+/g, ''), t = plainText(label);
+    if (!q) return 0;
+    const at = t.indexOf(q);
+    if (at >= 0) return 100 - at + (at === 0 || t[at - 1] === ' ' ? 20 : 0);
+    let pos = 0, score = 0, last = -2;
+    for (const ch of q) {
+        const found = t.indexOf(ch, pos);
+        if (found < 0) return -1;
+        score += (found === last + 1 ? 5 : 1) + (found === 0 || t[found - 1] === ' ' ? 3 : 0);
+        last = found;
+        pos = found + 1;
+    }
+    return score;
+}
+
+// Fills `container` with a search box and the list; onPick(categoryId) runs when one is chosen
+function buildCategoryPicker(container, onPick) {
+    container.textContent = '';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'cat-search';
+    input.placeholder = 'Cerca o crea una categoria…';
+    const list = document.createElement('div');
+    list.className = 'cat-list';
+    container.append(input, list);
+    let rows = [], active = 0;
+
+    function entries() {
+        const q = input.value.trim();
+        const all = [...categoryLibrary.custom.map(c => ({...c, custom: true})), ...categoryLibrary.presets];
+        const scored = all.map((c, i) => ({c, i, s: fuzzyScore(q, c.label)})).filter(x => x.s >= 0)
+            .sort((a, b) => b.s - a.s || a.i - b.i).map(x => ({kind: 'pick', ...x.c}));
+        const exact = all.some(c => plainText(c.label) === plainText(q));
+        if (q && !exact) scored.push({kind: 'create', label: q});
+        return scored;
+    }
+    function render() {
+        rows = entries();
+        active = Math.min(active, Math.max(rows.length - 1, 0));
+        list.textContent = '';
+        rows.forEach((row, i) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'cat-row' + (i === active ? ' active' : '');
+            b.textContent = row.kind === 'create' ? `＋ Crea «${row.label}»` : (row.custom ? '★ ' : '') + row.label;
+            b.addEventListener('mousedown', (e) => { e.preventDefault(); choose(row); });
+            list.appendChild(b);
+        });
+    }
+    async function choose(row) {
+        if (!row) return;
+        if (row.kind === 'create') {
+            const resp = await fetch('/api/categories', {
+                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: row.label})
+            });
+            const data = await resp.json();
+            if (!resp.ok) { alert(data.detail || 'Categoria non valida.'); return; }
+            categoryLibrary = {presets: data.presets, custom: data.custom};
+            onPick(data.id);
+        } else {
+            onPick(row.id);
+        }
+    }
+    input.addEventListener('input', () => { active = 0; render(); });
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') { active = Math.min(active + 1, rows.length - 1); render(); e.preventDefault(); }
+        else if (e.key === 'ArrowUp') { active = Math.max(active - 1, 0); render(); e.preventDefault(); }
+        else if (e.key === 'Enter') { choose(rows[active]); e.preventDefault(); }
+    });
+    input.addEventListener('click', (e) => e.stopPropagation());
+    render();
+    setTimeout(() => input.focus(), 0);
+}
+
+let pickerPopover = null;
+function closeCategoryPopover() {
+    if (pickerPopover) { pickerPopover.remove(); pickerPopover = null; }
+}
+// A floating picker under `anchor` (used for the doubtful words)
+async function openCategoryPopover(anchor, onPick) {
+    closeCategoryPopover();
+    await loadCategories();
+    const box = document.createElement('div');
+    box.className = 'ctx-menu cat-popover';
+    const rect = anchor.getBoundingClientRect();
+    box.style.position = 'fixed';
+    box.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 260))}px`;
+    box.style.top = `${rect.bottom + 4}px`;
+    box.addEventListener('click', (e) => e.stopPropagation());
+    buildCategoryPicker(box, (id) => { closeCategoryPopover(); onPick(id); });
+    document.body.appendChild(box);
+    pickerPopover = box;
+}
+document.addEventListener('click', closeCategoryPopover);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeCategoryPopover(); });
+
 function hideMaskMenu() {
     document.getElementById('maskContextMenu').style.display = 'none';
 }
@@ -1244,15 +1371,14 @@ function setupMaskContextMenu() {
         menu.style.left = `${Math.max(0, e.clientX - box.left)}px`;
         menu.style.top = `${Math.max(0, e.clientY - box.top)}px`;
         menu.style.display = 'block';
+        loadCategories().then(() => buildCategoryPicker(document.getElementById('maskPicker'), async (id) => {
+            const term = pendingMaskText;
+            hideMaskMenu();
+            await maskSelectedText(term, id);
+        }));
     });
 
-    menu.addEventListener('click', async (e) => {
-        const btn = e.target.closest('button[data-category]');
-        if (!btn) return;
-        const term = pendingMaskText;
-        hideMaskMenu();
-        await maskSelectedText(term, btn.dataset.category);
-    });
+    menu.addEventListener('click', (e) => e.stopPropagation());   // clicks inside the picker keep the menu open
 
     document.addEventListener('click', hideMaskMenu);
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideMaskMenu(); });
@@ -1318,6 +1444,7 @@ function renderPreflight(pf) {
                     <div class="preflight-actions">
                         <button type="button" class="preflight-btn" data-action="SOCIETA" data-term="${escapeHtml(w)}">🏢 Società</button>
                         <button type="button" class="preflight-btn" data-action="PERSONA" data-term="${escapeHtml(w)}">👤 Persona</button>
+                        <button type="button" class="preflight-btn" data-action="OTHER" data-term="${escapeHtml(w)}">… Altra categoria</button>
                         <button type="button" class="preflight-btn" data-action="IGNORE" data-term="${escapeHtml(w)}">✓ Termine comune</button>
                     </div>
                 </div>`).join("");
@@ -1336,6 +1463,11 @@ function renderPreflight(pf) {
 preflightBox.addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-action]');
     if (!btn) return;
+    if (btn.dataset.action === 'OTHER') {
+        e.stopPropagation();
+        openCategoryPopover(btn, (id) => handlePreflightAction(id, btn.dataset.term));
+        return;
+    }
     handlePreflightAction(btn.dataset.action, btn.dataset.term, btn.dataset.token);
 });
 

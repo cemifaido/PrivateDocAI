@@ -1,4 +1,5 @@
 import re
+import unicodedata
 import uuid
 from typing import Dict, List, Any, Optional, Tuple
 
@@ -729,6 +730,24 @@ class DeterministicAnonymizer:
             del self.reverse_map[token]
             self.registry = [r for r in self.registry if r["token"] != token]
             self._rebuild_aliases()
+
+    # Categories the user can pick for text the program did not recognise (right-click menu, doubtful words).
+    PRESET_CATEGORIES = {
+        "PERSONA": "Persona", "SOCIETA": "Società / Ente", "RIFERIMENTO": "Numero di protocollo / pratica",
+        "INDIRIZZO": "Indirizzo", "CODICE_FISCALE": "Codice fiscale", "PARTITA_IVA": "Partita IVA",
+        "IBAN": "IBAN / conto", "IMPORTO": "Importo", "DATA": "Data", "EMAIL": "E-mail",
+        "TELEFONO": "Telefono", "TARGA": "Targa", "RISERVATO": "Altro dato riservato",
+    }
+
+    @staticmethod
+    def normalize_category(name: str) -> str:
+        """'Numero di Protocollo' -> 'NUMERO_DI_PROTOCOLLO': letters and underscores only, as the
+        placeholders [CATEGORIA_1] are recognised in the answers by exactly that shape."""
+        plain = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode("ascii")
+        ident = re.sub(r"[^A-Za-z]+", "_", plain).strip("_").upper()
+        if len(re.sub(r"_", "", ident)) < 2 or len(ident) > 30 or ident == "IGNORE":
+            raise ValueError("Nome di categoria non valido: usa da 2 a 30 lettere.")
+        return ident
 
     def add_custom_entity(self, text: str, category: str) -> str:
         token = self.get_or_create_token(text, category)

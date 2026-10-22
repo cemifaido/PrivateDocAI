@@ -1077,3 +1077,18 @@ textarea:focus {
   color: var(--accent-amber);
   font-size: 0.9rem;
 }
+
+.cat-search {
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0 0 6px;
+    padding: 7px 9px;
+    border-radius: 6px;
+    border: 1px solid var(--border-active);
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    font: inherit;
+}
+.cat-list { max-height: 220px; overflow-y: auto; }
+.ctx-menu .cat-row.active, .ctx-menu .cat-row:hover { background: var(--primary); }
+.cat-popover { z-index: 3000; min-width: 250px; }

@@ -54,6 +54,25 @@ class DocumentService:
         self.sessions: Dict[str, Dict[str, Any]] = {}
         self.vault: Optional[Vault] = None
 
+    # ----- the user's own categories: one encrypted library shared by every case -----
+    def list_categories(self) -> Dict[str, Any]:
+        custom = self.vault.load_library("categorie").get("custom", {}) if self.vault else {}
+        return {"presets": [{"id": k, "label": v} for k, v in DeterministicAnonymizer.PRESET_CATEGORIES.items()],
+                "custom": [{"id": k, "label": v} for k, v in sorted(custom.items(), key=lambda kv: kv[1].lower())]}
+
+    def add_category(self, name: str) -> str:
+        """Adds (or finds) a category; raises ValueError for an unusable name."""
+        ident = DeterministicAnonymizer.normalize_category(name)
+        if ident in DeterministicAnonymizer.PRESET_CATEGORIES:
+            return ident
+        with self._state_lock:
+            library = self.vault.load_library("categorie")
+            custom = dict(library.get("custom", {}))
+            if ident not in custom:
+                custom[ident] = " ".join(name.split())[:40]
+                self.vault.save_library("categorie", {"custom": custom})
+        return ident
+
     def reload_detector(self) -> None:
         """Puts a fresh detector over the (newly installed) model folder, keeping the user's settings."""
         old = self.ner

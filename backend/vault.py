@@ -48,6 +48,8 @@ class Vault:
     _ID_PATTERN = re.compile(r"^[0-9a-f\-]{8,64}$")
     _CASE_AAD = b"PrivateDoc/case/v2:"
     _CHECK_AAD = b"PrivateDoc/vault-check/v2"
+    _LIBRARY_AAD = b"PrivateDoc/library/v1:"
+    _LIBRARY_NAME = re.compile(r"^[a-z]{3,20}$")
 
     def __init__(self, directory: str):
         self.directory = directory
@@ -172,6 +174,35 @@ class Vault:
                     (not is_v2 and data.get("id") not in (None, case_id)):
                 raise VaultError("Pratica non coerente con il nome del file.")
             return data
+
+    # ----- small encrypted libraries shared by all cases (e.g. the user's own categories) -----
+    def save_library(self, name: str, data: Dict[str, Any]):
+        if not self._LIBRARY_NAME.match(name):
+            raise VaultError("Nome della raccolta non valido.")
+        with self._lock:
+            payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
+            blob = self._MAGIC + self._encrypt(self._require_key(), payload, self._LIBRARY_AAD + name.encode())
+            self._write_atomic(os.path.join(self.directory, f"{name}.enc"), blob)
+
+    def load_library(self, name: str) -> Dict[str, Any]:
+        """The saved library, or {} when there is none yet."""
+        if not self._LIBRARY_NAME.match(name):
+            raise VaultError("Nome della raccolta non valido.")
+        with self._lock:
+            path = os.path.join(self.directory, f"{name}.enc")
+            key = self._require_key()
+            if not os.path.exists(path):
+                return {}
+            try:
+                with open(path, "rb") as f:
+                    blob = f.read()
+                if not blob.startswith(self._MAGIC):
+                    raise ValueError("formato non riconosciuto")
+                data = json.loads(self._decrypt(key, blob[len(self._MAGIC):],
+                                                self._LIBRARY_AAD + name.encode()).decode("utf-8"))
+            except (InvalidTag, ValueError, OSError, TypeError):
+                raise VaultError("Raccolta illeggibile (file danneggiato, spostato o password diversa).")
+            return data if isinstance(data, dict) else {}
 
     def delete(self, case_id: str):
         with self._lock:
