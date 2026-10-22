@@ -186,6 +186,21 @@ class TestMergeWithRules(unittest.TestCase):
         a.analyze_documents([{"id": "d0", "filename": "a.txt", "text": text}], extra_candidates={"d0": model_items})
         return a, a.mask_text(text, doc_key="d0")
 
+    def test_a_name_the_model_reports_several_times_never_breaks_the_analysis(self):
+        # a long act repeats names: the model finds them once per block, so the same text arrives many times
+        text = "Zeta Orione ha firmato. Poi Zeta Orione ha pagato. Infine Zeta Orione ha ricevuto."
+        twice = [{"raw": "Zeta Orione", "category": "ORG", "score": 0.9},
+                 {"raw": "Zeta Orione", "category": "ORG", "score": 0.9}]
+        a, masked = self._analyse(text, twice)
+        self.assertNotIn("Zeta Orione", masked)
+        self.assertEqual(len([r for r in a.registry if r["canonical"] == "zeta orione"]), 1)
+
+    def test_the_same_name_seen_by_a_rule_and_reported_twice_by_the_model(self):
+        text = "Il Sig. Valerio De Santis firma. Valerio De Santis paga."
+        item = {"raw": "Valerio De Santis", "category": "PERSONA", "score": 1.0}
+        a, masked = self._analyse(text, [item, dict(item), dict(item)])
+        self.assertNotIn("De Santis", masked)
+
     def test_a_surname_is_no_longer_left_in_clear_when_the_model_sees_the_whole_name(self):
         text = "Testimone: Anna Maria Colombo, di anni 42."
         a, masked = self._analyse(text, [{"raw": "Anna Maria Colombo", "category": "PERSONA", "score": 1.0}])

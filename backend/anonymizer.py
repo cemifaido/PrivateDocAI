@@ -283,12 +283,16 @@ class DeterministicAnonymizer:
                 canon = self._canon(m["raw"])
                 existing = by_canon.get(canon)
                 if existing is not None:
-                    # the same text can be seen by several rules: it is a weak guess only if EVERY
-                    # one of them was the capital-letters guess (a title/role anywhere makes it strong)
-                    weak = all(i["category"] == "PERSONA" and i.get("origin") == "bare" for i in same_text[canon])
-                    if weak and m["category"] != "PERSONA" and m.get("score", 0) >= self._OVERRULE_SCORE:
-                        for i in same_text[canon]:
-                            i["category"] = m["category"]
+                    # a rule saw the same text: it is a weak guess only if EVERY rule that saw it was the
+                    # capital-letters guess (a title/role anywhere makes it strong). When the text is
+                    # there only because the model itself found it earlier (a name repeated in the
+                    # document), there is nothing to arbitrate.
+                    seen_by_rules = same_text.get(canon)
+                    if seen_by_rules:
+                        weak = all(i["category"] == "PERSONA" and i.get("origin") == "bare" for i in seen_by_rules)
+                        if weak and m["category"] != "PERSONA" and m.get("score", 0) >= self._OVERRULE_SCORE:
+                            for i in seen_by_rules:
+                                i["category"] = m["category"]
                     continue
                 added = {"raw": m["raw"], "category": m["category"], "doc_name": doc.get("filename", key),
                          "doc_key": key, "source": "model"}
