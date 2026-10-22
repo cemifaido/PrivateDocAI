@@ -187,7 +187,8 @@ class DeterministicAnonymizer:
         # canonical term -> {"token", "text", "cs"}; kept across saves (they cannot be re-derived)
         self._defined: Dict[str, Dict[str, Dict[str, Any]]] = {}  # document key -> canonical term -> info
         # Defined terms that look like names but could not be tied to one party (to be checked)
-        self.unassigned_terms: set = set()
+        self._unassigned: Dict[str, List[str]] = {}  # document key -> defined names not tied to a party
+        self._ambiguous_defined: set = set()         # same word defined for different parties in different acts
 
     def _letter_label(self, num: int) -> str:
         """Converts 1 -> A, 2 -> B, ..., 26 -> Z, 27 -> AA"""
@@ -228,7 +229,82 @@ class DeterministicAnonymizer:
 
         return token
 
-    def analyze_documents(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    # Identifiers with a fixed shape: when rules and model disagree, the rule keeps its category
+    # (the rules validate the shape, a neural tagger can fragment a long code)
+    _MODEL_NAME_CATEGORIES = ("PERSONA", "SOCIETA", "INDIRIZZO")
+
+    @staticmethod
+    def _canon(raw: str) -> str:
+        return " ".join(raw.lower().rstrip('.,;:').split())
+
+    # a model category may overrule a rule's PERSONA only when the rule had the weakest evidence
+    # (two capitalised words) and the model is very sure
+    _OVERRULE_SCORE = 0.95
+
+    @staticmethod
+    def _occurrences(text: str, phrase: str) -> List[Any]:
+        return [m.span() for m in re.finditer(rf"(?<!\w){re.escape(phrase)}(?!\w)", text, re.IGNORECASE)]
+
+    def _merge_model_candidates(self, documents: List[Dict[str, Any]], rule_items: List[Dict[str, Any]],
+                                model_by_doc: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+        """
+        Rules first, model on top, DOCUMENT BY DOCUMENT (what one act says never decides what
+        happens in another):
+        - role words and common terms from the model are ignored whatever the definitions say;
+        - same text found by both: the rule's category stays; only a rule PERSONA made of two
+          capitalised words yields to a more specific, very confident model category;
+        - the model's extra findings are added;
+        - a rule PERSONA that, in THIS document, appears only inside a longer name the model found
+          is dropped (it would only be noise); if it also appears on its own, it stays.
+        """
+        by_doc_rules: Dict[Any, List[Dict[str, Any]]] = {}
+        for item in rule_items:
+            by_doc_rules.setdefault(item.get("doc_key"), []).append(item)
+        result: List[Dict[str, Any]] = []
+        for index, doc in enumerate(documents):
+            key = self._doc_key(doc, index)
+            text = doc.get("text", "")
+            rules = by_doc_rules.get(key, [])
+            model = [m for m in model_by_doc.get(key, [])
+                     if not self._is_common_term(m["raw"]) and self._canon(m["raw"]) not in self.STOPWORDS]
+            by_canon: Dict[str, Dict[str, Any]] = {}
+            same_text: Dict[str, List[Dict[str, Any]]] = {}
+            for i in rules:
+                canon = self._canon(i["raw"])
+                by_canon.setdefault(canon, i)
+                same_text.setdefault(canon, []).append(i)
+            additions = []
+            for m in model:
+                canon = self._canon(m["raw"])
+                existing = by_canon.get(canon)
+                if existing is not None:
+                    # the same text can be seen by several rules: it is a weak guess only if EVERY
+                    # one of them was the capital-letters guess (a title/role anywhere makes it strong)
+                    weak = all(i["category"] == "PERSONA" and i.get("origin") == "bare" for i in same_text[canon])
+                    if weak and m["category"] != "PERSONA" and m.get("score", 0) >= self._OVERRULE_SCORE:
+                        for i in same_text[canon]:
+                            i["category"] = m["category"]
+                    continue
+                added = {"raw": m["raw"], "category": m["category"], "doc_name": doc.get("filename", key),
+                         "doc_key": key, "source": "model"}
+                additions.append(added)
+                by_canon[canon] = added
+            longer = [m["raw"] for m in model
+                      if m["category"] in self._MODEL_NAME_CATEGORIES and " " in m["raw"].strip()]
+            inside_spans = [span for whole in longer for span in self._occurrences(text, whole)]
+            kept = []
+            for item in rules:
+                if item["category"] == "PERSONA" and inside_spans:
+                    own = self._occurrences(text, item["raw"])
+                    if own and all(any(w0 <= o0 and o1 <= w1 and (w1 - w0) > (o1 - o0) for w0, w1 in inside_spans)
+                                   for o0, o1 in own):
+                        continue
+                kept.append(item)
+            result.extend(kept + additions)
+        return result
+
+    def analyze_documents(self, documents: List[Dict[str, Any]],
+                          extra_candidates: Optional[Dict[str, List[Dict[str, Any]]]] = None) -> List[Dict[str, Any]]:
         combined_candidates = []
 
         for doc_idx, doc in enumerate(documents):
@@ -237,7 +313,11 @@ class DeterministicAnonymizer:
             found = self._detect_entities(text)
             for item in found:
                 item["doc_name"] = doc_name
+                item["doc_key"] = self._doc_key(doc, doc_idx)
                 combined_candidates.append(item)
+
+        if extra_candidates:
+            combined_candidates = self._merge_model_candidates(documents, combined_candidates, extra_candidates)
 
         # Prioritize non-PERSONA candidates first (SOCIETA, IBAN, CF, IMPORTO, DATA, etc.)
         # so company aliases are claimed before bare person name heuristics match them.
@@ -361,9 +441,14 @@ class DeterministicAnonymizer:
         self.reverse_map.pop(src, None)
         self.registry = [r for r in self.registry if r["token"] != src]
 
+    @property
+    def unassigned_terms(self) -> set:
+        return {t for terms in self._unassigned.values() for t in terms}
+
     def forget_document(self, doc_key: str):
         """A removed document takes its own definitions with it."""
         self._defined.pop(str(doc_key), None)
+        self._unassigned.pop(str(doc_key), None)
 
     def _link_definitions(self, definitions):
         """
@@ -371,14 +456,14 @@ class DeterministicAnonymizer:
         the same word may mean someone else. A name that shows up unbound elsewhere is flagged by
         the pre-flight as a suspect instead of being guessed.
         """
-        self.unassigned_terms = set()
         for doc_key, text, defs in definitions:
             self._defined.pop(doc_key, None)  # re-read from scratch when the document is analysed again
+            self._unassigned.pop(doc_key, None)
             for d in defs:
                 entity = self._find_antecedent(text[:d["start"]])
                 for term in d["unlinked"]:
                     if not self._is_common_term(term):
-                        self.unassigned_terms.add(term)
+                        self._unassigned.setdefault(doc_key, []).append(term)
                 if entity is None:
                     continue
                 token = entity["token"]
@@ -476,9 +561,15 @@ class DeterministicAnonymizer:
         if doc_key is not None:
             return dict(self._defined.get(str(doc_key), {}))
         merged: Dict[str, Dict[str, Any]] = {}
+        ambiguous: set = set()
         for scope in self._defined.values():
             for canon, info in scope.items():
+                if canon in merged and merged[canon]["token"] != info["token"]:
+                    ambiguous.add(canon)  # two acts, two different parties: do not guess
                 merged.setdefault(canon, info)
+        for canon in ambiguous:
+            merged.pop(canon, None)
+        self._ambiguous_defined = ambiguous
         return merged
 
     def _build_mask_pattern(self, doc_key: Optional[str] = None):
@@ -574,6 +665,10 @@ class DeterministicAnonymizer:
             if surname not in (w.lower() for w in suspects) and re.search(
                     rf'(?<![\w\[]){re.escape(surname)}(?![\w\]])', without_tokens, re.IGNORECASE):
                 suspects.append(surname.title())
+        for canon in sorted(self._ambiguous_defined):
+            if canon.title() not in suspects and re.search(
+                    rf'(?<![\w\[]){re.escape(canon)}(?![\w\]])', without_tokens, re.IGNORECASE):
+                suspects.append(canon.title())
         for term in sorted(self.unassigned_terms):
             if term not in suspects and re.search(
                     rf'(?<![\w\[]){re.escape(term)}(?![\w\]])', without_tokens, re.IGNORECASE):
@@ -665,6 +760,7 @@ class DeterministicAnonymizer:
             "forward_map": {k: v for k, v in self.forward_map.items() if k not in self._aliases},
             "reverse_map": dict(self.reverse_map),
             "defined_aliases": {k: dict(v) for k, v in self._defined.items()},
+            "unassigned_terms": {k: list(v) for k, v in self._unassigned.items()},
         }
 
     @classmethod
@@ -676,6 +772,7 @@ class DeterministicAnonymizer:
         anonymizer.forward_map = dict(data.get("forward_map", {}))
         anonymizer.reverse_map = dict(data.get("reverse_map", {}))
         anonymizer._defined = {k: dict(v) for k, v in data.get("defined_aliases", {}).items()}
+        anonymizer._unassigned = {k: list(v) for k, v in data.get("unassigned_terms", {}).items()}
         anonymizer._rebuild_aliases()
         return anonymizer
 
@@ -889,9 +986,11 @@ class DeterministicAnonymizer:
         # Bare "Firstname Lastname"
         bare_pattern = rf'\b({word}(?:\s+{particle})?\s+{word})\b'
 
-        for pattern in (prefix_pattern, role_pattern, bare_pattern):
+        # "bare" = two capitalised words and nothing else: the weakest evidence; a title or a role
+        # in front of the name ("Avv.", "rappresentata da") is strong evidence
+        for origin, pattern in (("prefix", prefix_pattern), ("role", role_pattern), ("bare", bare_pattern)):
             for m in re.finditer(pattern, text):
                 name = m.group(1).strip()
                 if not self._has_stopword(name) and not self._STRIP_CORP_SUFFIX.search(name):
-                    entities.append({"raw": name, "category": "PERSONA"})
+                    entities.append({"raw": name, "category": "PERSONA", "origin": origin})
         return entities

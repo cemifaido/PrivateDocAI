@@ -30,6 +30,7 @@ documenti ──► lettura locale ──► riconoscimento dati ──► testo
 - **Scelta dei documenti** da includere nella richiesta («confronta il Documento 3 con il 7»), con numerazione fissa; i nomi dei file non vengono inviati.
 - **Caricamenti grandi:** contatore dei file mancanti, interruzione (tenendo o scartando quanto caricato), OCR in parallelo.
 - **File non supportati** (ad esempio le foto) elencati con nome, percorso e motivo, invece di essere ignorati in silenzio.
+- **Riconoscimento avanzato facoltativo:** un modello locale (MIT, su CPU, scaricato a parte) si affianca alle regole per nomi in contesto, società, numeri di ruolo e dati catastali; la barra laterale mostra sempre se è attivo. Vedi [`NOTICE.md`](NOTICE.md) e la sezione 12 di [`PROGETTO_PRIVATEDOC_AI.md`](PROGETTO_PRIVATEDOC_AI.md).
 - **Guida in-app** (`/guida`) con uso, limiti e riferimenti normativi.
 
 ## Avvio rapido

@@ -85,6 +85,23 @@
         </tbody>
     </table>
 
+    <h2 id="modello">3 bis. Riconoscimento avanzato (facoltativo)</h2>
+    <p>Oltre alle regole, il programma può usare un <strong>piccolo modello di intelligenza artificiale che gira sul tuo computer</strong> (senza scheda grafica, circa mezzo secondo ogni 120 parole)
+    per trovare ciò che le regole non vedono: nomi in contesto, nomi di società, numeri di ruolo e di polizza, dati catastali, documenti d'identità.
+    Sul PC di prova (12 core) ha impiegato circa mezzo secondo ogni 120 parole; i tempi variano da computer a computer.</p>
+    <ul>
+        <li><strong>Non è incluso:</strong> pesa 1,2 GB. Si scarica una volta e si mette nella cartella <code>models\rizzo-pii-0.3B</code> accanto al programma
+            (da sorgente: <code>hf download rizzoaiacademy/rizzo-pii-0.3B --revision v1.5.0 --local-dir models/rizzo-pii-0.3B</code>).</li>
+        <li><strong>Si controlla da solo:</strong> prima di usarlo il programma verifica l'impronta (SHA-256) di <em>tutti</em> i file del modello (la verifica parte in sottofondo all'avvio);
+            finché non è finita la barra laterale dice «verifica in corso», e se una sola impronta non corrisponde il modello non viene usato e lo dice.</li>
+        <li><strong>Resta sul tuo computer:</strong> funziona senza connessione; il programma non scarica nulla in automatico.</li>
+        <li><strong>Se manca,</strong> tutto funziona con le sole regole e la barra laterale lo indica («non installato»).</li>
+        <li><strong>Profilo esteso:</strong> città, CAP, età, sesso e ora non vengono mascherati per impostazione predefinita (toglierebbero al modello il contesto); puoi attivarli con la casella nella barra laterale.</li>
+        <li>Il modello è un aiuto in più, non una garanzia: le regole mantengono la precedenza sui codici a forma fissa (IBAN, codice fiscale, partita IVA…), un suo errore non blocca il caricamento (il documento resta analizzato con le sole regole e la scheda lo segnala)
+            e la verifica prima dell'invio resta necessaria.</li>
+        <li>Licenze: modello e base MIT (vedi <code>NOTICE.md</code> nel repository).</li>
+    </ul>
+
     <h2>4. Il provider dell'intelligenza artificiale</h2>
     <ul>
         <li>Il testo mascherato <strong>esce comunque dal computer</strong> verso il servizio scelto. Verifica le condizioni d'uso e le impostazioni dell'account (addestramento sui dati, conservazione, account personale o aziendale) prima di inviare materiale di un cliente.</li>

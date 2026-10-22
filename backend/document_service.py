@@ -11,6 +11,7 @@ from .runtime import APP_DIR
 from .anonymizer import DeterministicAnonymizer
 from .browser_bridge import BrowserBridge
 from .vault import Vault
+from .ner import NerDetector
 
 # Type aliases for clean code
 Tuple_Session = Dict[str, Any]
@@ -29,7 +30,11 @@ class DocumentService:
         self.data_dir = data_dir or os.environ.get("PRIVATEDOC_DATA_DIR") or os.path.join(APP_DIR, "data")
         os.makedirs(self.data_dir, exist_ok=True)
         self.extractor = DocumentExtractor()
-        self.progress: Dict[str, Any] = {"file": "", "pages_done": 0, "pages_total": 0}
+        self.progress: Dict[str, Any] = {"file": "", "pages_done": 0, "pages_total": 0, "phase": "ocr"}
+        # optional model (see backend/ner.py): used only when its folder is present and verified
+        self.ner = NerDetector(model_dir=os.environ.get("PRIVATEDOC_NER_DIR")
+                               or os.path.join(APP_DIR, "models", "rizzo-pii-0.3B"))
+        self.ner.start_verification()   # hashes the files in the background, never blocking the interface
         self._job_id = ""
         self._upload_lock = threading.Lock()   # one upload at a time (desktop app)
         self._state_lock = threading.RLock()   # session changes + their snapshot/save
@@ -45,9 +50,9 @@ class DocumentService:
         self.sessions: Dict[str, Dict[str, Any]] = {}
         self.vault: Optional[Vault] = None
 
-    def _set_progress(self, job_id: str, done: int, total: int, name: str):
+    def _set_progress(self, job_id: str, done: int, total: int, name: str, phase: str = "ocr"):
         if job_id == self._job_id:  # a stopped job must not write into the next one
-            self.progress = {"file": name, "pages_done": done, "pages_total": total}
+            self.progress = {"file": name, "pages_done": done, "pages_total": total, "phase": phase}
 
     @property
     def state_lock(self) -> "threading.RLock":
@@ -188,13 +193,35 @@ class DocumentService:
                             operation_id: Optional[str], expected_epoch: int) -> Dict[str, Any]:
         job_id = str(uuid.uuid4())
         self._job_id = job_id
-        self.progress = {"file": "", "pages_done": 0, "pages_total": 0}
+        self.progress = {"file": "", "pages_done": 0, "pages_total": 0, "phase": "ocr"}
         # fresh cancel event + progress callback for THIS job (see DocumentExtractor.begin_job)
         self.extractor.begin_job(on_progress=lambda d, t, n: self._set_progress(job_id, d, t, n))
 
         extracted_all = []
         for filename, content in files:  # slow part (OCR): outside the state lock
             extracted_all.append(self.extractor.extract_with_report(filename, content))
+
+        # second recogniser (slow, CPU): also outside the lock, also interruptible
+        model_found: Dict[int, List[Dict[str, Any]]] = {}
+        model_state: Dict[int, str] = {}   # how each document was analysed, shown to the user
+        cancel = self.extractor.cancel_event
+        for docs, _ in extracted_all:
+            for doc in docs:
+                if not self.ner.active:
+                    model_state[id(doc)] = "non usato"
+                elif cancel.is_set():
+                    model_state[id(doc)] = "interrotto"
+                else:
+                    model_found[id(doc)] = self.ner.detect(
+                        doc.get("text", ""), cancel=cancel,
+                        progress=lambda d, t, name=doc["filename"]: self._set_progress(job_id, d, t, name, "ner"))
+                    if cancel.is_set():
+                        model_found[id(doc)] = []             # interrupted: nothing half-done is kept
+                        model_state[id(doc)] = "interrotto"
+                    elif self.ner.status()["state"] == "error":
+                        model_state[id(doc)] = "errore"        # failed: this document has the rules only
+                    else:
+                        model_state[id(doc)] = "ok"
 
         with self._state_lock:
             self._require_current_epoch(expected_epoch)
@@ -210,6 +237,7 @@ class DocumentService:
                 for doc in extracted_docs:
                     doc["id"] = str(uuid.uuid4())
                     doc["operation_id"] = operation_id
+                    doc["model"] = model_state.get(id(doc), "non usato")
                     session["documents"].append(doc)
                     self._ensure_numbers(session)
                     new_documents.append(doc)
@@ -217,7 +245,9 @@ class DocumentService:
             # Analyze only the new documents to extend the deterministic mapping
             anonymizer.current_operation = operation_id
             try:
-                entities = anonymizer.analyze_documents(new_documents)
+                entities = anonymizer.analyze_documents(
+                    new_documents,
+                    extra_candidates={doc["id"]: model_found.get(id(doc), []) for doc in new_documents})
             finally:
                 anonymizer.current_operation = None
             self.persist(session["id"])
@@ -297,6 +327,7 @@ class DocumentService:
                 "filename": d["filename"],
                 "source_archive": d.get("source_archive"),
                 "file_type": d["file_type"],
+                "model": d.get("model", "non usato"),
                 "char_count": len(d.get("text", "")),
                 "metadata": d.get("metadata", {})
             }

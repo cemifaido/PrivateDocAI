@@ -198,6 +198,22 @@ async def upload_files(
     except SessionInvalidated:
         raise HTTPException(status_code=423, detail="vault_locked")
 
+@app.get("/api/ner/status")
+async def ner_status():
+    return doc_service.ner.status()
+
+class NerSettings(BaseModel):
+    enabled: Optional[bool] = None
+    extended: Optional[bool] = None
+
+@app.post("/api/ner/settings")
+async def ner_settings(data: NerSettings):
+    if data.enabled is not None:
+        doc_service.ner.enabled = data.enabled
+    if data.extended is not None:
+        doc_service.ner.extended = data.extended
+    return doc_service.ner.status()
+
 @app.get("/api/upload/progress")
 async def upload_progress():
     return doc_service.progress

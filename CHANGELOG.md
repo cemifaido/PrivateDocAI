@@ -5,6 +5,9 @@ Formato ispirato a [Keep a Changelog](https://keepachangelog.com/it/1.1.0/); le 
 ## [Non rilasciato]
 
 ### Aggiunto
+- **Riconoscimento avanzato facoltativo** (`backend/ner.py`): un modello locale (rizzo-pii 0.3B, MIT, su CPU) usato *in aggiunta* alle regole per nomi in contesto, società, numeri di ruolo, dati catastali e documenti d'identità. Non è incluso: si scarica a parte in `models/`, i file sono verificati con SHA-256 e caricati solo da disco (nessun download); la barra laterale mostra sempre se è attivo, non installato o rifiutato, con un «profilo esteso» (città, CAP, età, sesso, ora) spento per impostazione predefinita. Regole e codici a forma fissa hanno la precedenza; senza modello tutto funziona come prima. Verifica SHA-256 di tutti i file del modello (in sottofondo, prima dell'uso), fusione con le regole documento per documento, un guasto del modello non blocca il caricamento (il documento resta con le sole regole e lo segnala), letture oltre i 512 token a finestre, `requirements-ner.txt`, build che fallisce se mancano le librerie del modello e `PrivateDocAI.exe --self-test`.
+- `tools/benchmark_detectors.py`: confronto locale tra sole regole e regole + modello, documento per documento, con un elenco opzionale di dati che non devono sopravvivere (fughe misurate con e senza modello); esempio inventato in `tools/esempio_benchmark/`.
+- `NOTICE.md` con le attribuzioni dei componenti di terzi facoltativi.
 - Nuovi dati riconosciuti con regole: numeri di ruolo (R.G.), polizza, sinistro, pratica, protocollo, REA, codice destinatario/SDI, CIG, CUP, estremi catastali completi (foglio, particella, subalterno), telaio/VIN, documento d'identità (carta, passaporto, patente), BIC/SWIFT e matricola.
 - Altre formule di definizione negli atti: «d'ora innanzi», «qui di seguito», «nel seguito», «in appresso», «per brevità», «nel prosieguo anche», definizioni senza parentesi («..., di seguito “X”,»), sigle tra parentesi o con «con sigla».
 

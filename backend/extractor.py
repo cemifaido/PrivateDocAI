@@ -17,7 +17,7 @@ import openpyxl
 import xlrd
 import extract_msg
 
-from .runtime import ocr_model_dir
+from .runtime import ensure_torch_threads, ocr_model_dir
 
 class DocumentExtractor:
     """
@@ -56,7 +56,6 @@ class DocumentExtractor:
         os.makedirs(self.temp_dir, exist_ok=True)
         self._ocr_readers: List[Any] = []
         self._ocr_unavailable = False
-        self._torch_threads_set = False
         self._ocr_lock = threading.Lock()
         self.cancel_event = threading.Event()
         self.on_progress = None  # callable(pages_done, pages_total, file_name)
@@ -84,15 +83,8 @@ class DocumentExtractor:
             warnings.filterwarnings("ignore", message=".*pin_memory.*")
             while len(self._ocr_readers) < wanted:
                 self._ocr_readers.append(easyocr.Reader(['it', 'en'], gpu=False, verbose=False, **kwargs))
-            if not self._torch_threads_set:
-                self._torch_threads_set = True
-                try:  # share the cores among the workers instead of oversubscribing them
-                    import torch
-                    cores = os.cpu_count() or 4
-                    # more threads than physical cores (about half the logical ones) slows torch down
-                    torch.set_num_threads(min(max(1, cores // self.OCR_MAX_WORKERS), max(1, cores // 2)))
-                except Exception:
-                    pass
+            import torch
+            ensure_torch_threads(torch)
         except Exception:
             if not self._ocr_readers:
                 self._ocr_unavailable = True

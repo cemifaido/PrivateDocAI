@@ -529,7 +529,11 @@ async function handleFiles(fileList) {
     const poll = setInterval(async () => {
         try {
             const p = await (await _nativeFetch('/api/upload/progress')).json();
-            ocrNote = p.pages_total > 0 ? ` · lettura pagine (OCR): ${p.pages_done} di ${p.pages_total}` : "";
+            ocrNote = p.pages_total > 0
+                ? (p.phase === 'ner'
+                    ? ` · riconoscimento con il modello: ${p.pages_done} di ${p.pages_total} blocchi`
+                    : ` · lettura pagine (OCR): ${p.pages_done} di ${p.pages_total}`)
+                : "";
             updateProgress(done, total, currentName, started, ocrNote);
         } catch { /* ignore */ }
     }, 1000);
@@ -663,6 +667,40 @@ function setSessionName(name) {
     document.getElementById('praticaBar').style.display = state.sessionId ? 'block' : 'none';
 }
 
+// ---------- Optional recogniser (model): always visible whether it is working ----------
+async function loadNerStatus() {
+    try {
+        const st = await (await fetch('/api/ner/status')).json();
+        const text = document.getElementById('nerStatusText');
+        const row = document.getElementById('nerExtendedRow');
+        if (st.state === 'verifying') {
+            text.textContent = "⏳ Verifica dei file del modello in corso...";
+            text.style.color = "var(--accent-amber)";
+            setTimeout(loadNerStatus, 2000);   // until the check has finished
+        } else if (st.active) {
+            text.textContent = "✓ Attivo: regole + modello locale (file verificati)";
+            text.style.color = "var(--accent-emerald)";
+        } else if (st.state === 'rejected' || st.state === 'error' || st.state === 'missing') {
+            text.textContent = "✗ " + st.reason.charAt(0).toUpperCase() + st.reason.slice(1);
+            text.style.color = "var(--accent-amber)";
+        } else {
+            text.textContent = "⏸ " + st.reason.charAt(0).toUpperCase() + st.reason.slice(1);
+            text.style.color = "var(--text-secondary)";
+        }
+        row.style.display = (st.state === 'ready' || st.state === 'off') ? 'block' : 'none';
+        document.getElementById('nerExtended').checked = !!st.extended;
+    } catch { /* ignore: the page works without it */ }
+}
+
+document.getElementById('nerExtended').addEventListener('change', async (e) => {
+    await fetch('/api/ner/settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({extended: e.target.checked})
+    });
+    loadNerStatus();
+});
+
 async function initVault() {
     const st = await (await _nativeFetch('/api/vault/status')).json();
     if (!st.initialized) showVaultModal('setup', st);
@@ -672,6 +710,7 @@ async function initVault() {
 
 async function afterUnlock() {
     document.getElementById('vaultModal').style.display = 'none';
+    loadNerStatus();
     await loadCases();
     await restoreSession();
 }
@@ -931,6 +970,9 @@ function renderDocumentGrid() {
                 <span>Formato: <strong>${doc.file_type.toUpperCase()}</strong></span>
                 <span>${doc.char_count.toLocaleString()} caratteri</span>
             </div>
+            ${doc.model === 'ok' ? '<div class="doc-card-source">🧠 Analizzato con regole + modello</div>'
+              : (doc.model === 'interrotto' || doc.model === 'errore')
+                ? `<div class="doc-card-source" style="color:var(--accent-amber);">⚠ Solo regole (${doc.model === 'errore' ? 'il modello ha dato errore' : 'analisi interrotta'})</div>` : ''}
             <div style="margin-top:8px;"><button type="button" class="preflight-btn card-remove">🗑 Rimuovi dalla pratica</button></div>
         `;
         card.querySelector('.card-remove').addEventListener('click', () =>

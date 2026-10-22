@@ -1,0 +1,7 @@
+# Optional recogniser (backend/ner.py). Needed ONLY to use the local model; the program works without it.
+# Tested with: transformers 5.14.1, tokenizers 0.22.2, safetensors 0.8.0, torch 2.10 (CPU).
+# The model itself (1.2 GB) is not a pip package: see NOTICE.md and the in-app guide.
+torch>=2.4
+transformers>=4.50
+tokenizers>=0.21
+safetensors>=0.4

@@ -1,7 +1,7 @@
 # PyInstaller spec: cartella (non onefile) con PrivateDocAI.exe
 # Build: build_exe.bat  (oppure: pyinstaller --noconfirm PrivateDocAI.spec)
 import os
-from PyInstaller.utils.hooks import collect_all
+from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 datas = [('static', 'static')]
 binaries = []
@@ -22,13 +22,34 @@ for pkg in ('easyocr', 'playwright', 'cryptography', 'docx', 'extract_msg', 'ope
     binaries += b
     hiddenimports += h
 
+# Optional recogniser (backend/ner.py): the libraries are bundled, the model (1.2 GB) is not.
+# The build FAILS (instead of silently producing an exe without them) unless it is told to skip:
+#   set PRIVATEDOC_BUILD_WITHOUT_NER=1
+import importlib.util
+if os.environ.get('PRIVATEDOC_BUILD_WITHOUT_NER') == '1':
+    print('WARNING: building WITHOUT the optional model libraries')
+else:
+    for required in ('transformers', 'tokenizers', 'safetensors'):
+        if importlib.util.find_spec(required) is None:
+            raise SystemExit(f"Missing '{required}': pip install -r requirements-ner.txt "
+                             "(or set PRIVATEDOC_BUILD_WITHOUT_NER=1 to build without the model)")
+    for pkg in ('tokenizers', 'safetensors'):
+        d, b, h = collect_all(pkg)
+        datas += d
+        binaries += b
+        hiddenimports += h
+    for pkg in ('transformers.models.modernbert', 'transformers.models.auto'):
+        hiddenimports += collect_submodules(pkg)
+
 a = Analysis(
     ['run.py'],
     pathex=['.'],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
-    excludes=['tkinter', 'matplotlib', 'IPython', 'pytest', 'notebook', 'tensorboard'],
+    # heavy packages pulled in by the model libraries' hooks that the program never uses
+    excludes=['tkinter', 'matplotlib', 'IPython', 'pytest', 'notebook', 'tensorboard',
+              'pandas', 'pyarrow', 'botocore', 'boto3', 'nltk'],
 )
 pyz = PYZ(a.pure)
 exe = EXE(

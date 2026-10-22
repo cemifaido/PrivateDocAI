@@ -1,0 +1,84 @@
+{
+ "atto_esempio.txt": [
+  {
+   "text": "Zeta Holding",
+   "category": "SOCIETA"
+  },
+  {
+   "text": "Zeta",
+   "category": "SOCIETA"
+  },
+  {
+   "text": "Giuseppe Esposito",
+   "category": "PERSONA"
+  },
+  {
+   "text": "Esposito",
+   "category": "PERSONA"
+  },
+  {
+   "text": "Chiara Ferrante",
+   "category": "PERSONA"
+  },
+  {
+   "text": "Omega Costruzioni",
+   "category": "SOCIETA"
+  },
+  {
+   "text": "Omega",
+   "category": "SOCIETA"
+  },
+  {
+   "text": "Luca Bianchi",
+   "category": "PERSONA"
+  },
+  {
+   "text": "Anna Maria Colombo",
+   "category": "PERSONA"
+  },
+  {
+   "text": "Colombo",
+   "category": "PERSONA"
+  },
+  {
+   "text": "2210/2026",
+   "category": "RIFERIMENTO"
+  },
+  {
+   "text": "Foglio 21",
+   "category": "CATASTO"
+  },
+  {
+   "text": "Via dei Mille",
+   "category": "INDIRIZZO"
+  },
+  {
+   "text": "IT60X0542811101000000123456",
+   "category": "IBAN"
+  },
+  {
+   "text": "CA12345AB",
+   "category": "DOC_IDENTITA"
+  },
+  {
+   "text": "ABC-123456",
+   "category": "RIFERIMENTO"
+  },
+  {
+   "text": "2026/778",
+   "category": "RIFERIMENTO"
+  },
+  {
+   "text": "l.bianchi@omega.example",
+   "category": "EMAIL"
+  },
+  {
+   "text": "035 123456",
+   "category": "TELEFONO"
+  },
+  {
+   "text": "FG123HK",
+   "category": "TARGA"
+  }
+ ]
+}
