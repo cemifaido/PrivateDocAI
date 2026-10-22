@@ -1,6 +1,7 @@
 # Analisi anti-rollback del vault
 
-**Stato:** threat model e opzioni progettuali; nessuna modifica al prodotto.  
+**Stato:** threat model e opzioni progettuali; nessuna modifica al prodotto.
+
 **Ambito:** vault locale Windows di PrivateDoc AI (`vault.json` e `pratiche/*.enc`).
 
 ## Esito in breve
