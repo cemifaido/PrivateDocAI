@@ -207,8 +207,10 @@ class DocumentService:
         cancel = self.extractor.cancel_event
         for docs, _ in extracted_all:
             for doc in docs:
-                if not self.ner.active:
-                    model_state[id(doc)] = "non usato"
+                # "verifying" counts as usable: detect() waits for the check instead of silently
+                # analysing the first documents of a fresh start with the rules only
+                if self.ner.status()["state"] not in ("verifying", "ready"):
+                    model_state[id(doc)] = "rifiutato" if self.ner.status()["state"] == "rejected" else "non usato"
                 elif cancel.is_set():
                     model_state[id(doc)] = "interrotto"
                 else:
@@ -218,10 +220,11 @@ class DocumentService:
                     if cancel.is_set():
                         model_found[id(doc)] = []             # interrupted: nothing half-done is kept
                         model_state[id(doc)] = "interrotto"
-                    elif self.ner.status()["state"] == "error":
-                        model_state[id(doc)] = "errore"        # failed: this document has the rules only
                     else:
-                        model_state[id(doc)] = "ok"
+                        after = self.ner.status()["state"]
+                        # the check may have rejected the files, or the run may have failed:
+                        # this document then has the rules only, and says so
+                        model_state[id(doc)] = {"ready": "ok", "error": "errore", "rejected": "rifiutato"}.get(after, "non usato")
 
         with self._state_lock:
             self._require_current_epoch(expected_epoch)

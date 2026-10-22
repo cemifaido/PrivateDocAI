@@ -241,8 +241,9 @@ class NerDetector:
     """
 
     def __init__(self, model_dir: Optional[str] = None, backend: Any = None,
-                 expected_sha256: Optional[Dict[str, str]] = None):
+                 expected_sha256: Optional[Dict[str, str]] = None, backend_factory: Optional[Callable] = None):
         self._model_dir = model_dir
+        self._backend_factory = backend_factory  # tests: build a stand-in AFTER the files were verified
         self.extended = False
         self.enabled = True
         self._backend = backend
@@ -309,16 +310,16 @@ class NerDetector:
     # ----- loading (once, only after the check passed) -----
     def _load(self) -> bool:
         with self._load_lock:
+            if self._failure:      # a failure always wins, even if a backend was loaded before it
+                return False
             if self._backend is not None:
                 return True
-            if self._failure:
-                return False
         if not self._wait_verified():
             return False
         with self._load_lock:
             if self._backend is None:
                 try:
-                    self._backend = TorchBackend(self._model_dir)
+                    self._backend = (self._backend_factory or TorchBackend)(self._model_dir)
                 except Exception as exc:  # missing library, damaged file...
                     self._failure = f"modello non utilizzabile ({type(exc).__name__}): si usano solo le regole"
                     return False

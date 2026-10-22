@@ -345,6 +345,49 @@ class TestModelThroughTheApi(unittest.TestCase):
                                   json={"session_id": up["session_id"], "instruction": "x"}).json()["prompt"]
         self.assertIn("Colombo", prompt)                                # the model's finding was dropped: rules only
 
+    def _detector_over_files(self, content, expected):
+        from backend import ner as ner_module
+        folder = os.path.join(self.dir, "modello")
+        os.makedirs(folder)
+        for name in ner_module.MODEL_FILES:
+            with open(os.path.join(folder, name), "wb") as f:
+                f.write(content)
+        return NerDetector(model_dir=folder, expected_sha256={n: expected for n in ner_module.MODEL_FILES},
+                           backend_factory=lambda _dir: FakeBackend({"Colombo Anna Maria": ("FULLNAME", 0.99)}))
+
+    def test_an_upload_during_the_verification_waits_for_the_model(self):
+        import hashlib
+        import threading
+        from backend import ner as ner_module
+        gate = threading.Event()
+        real_hash = ner_module.sha256_of
+        ner_module.sha256_of = lambda path: (gate.wait(5), real_hash(path))[1]
+        try:
+            self.service.ner = self._detector_over_files(b"x", hashlib.sha256(b"x").hexdigest())
+            self.assertEqual(self.service.ner.status()["state"], "verifying")
+            threading.Timer(0.3, gate.set).start()      # the check ends while the upload is waiting
+            up = self.client.post("/api/upload", files=[
+                ("files", ("atto.txt", b"Testimone Colombo Anna Maria.", "text/plain"))]).json()
+        finally:
+            gate.set()
+            ner_module.sha256_of = real_hash
+        self.assertEqual(up["documents"][0]["model"], "ok")             # not silently rules-only
+        prompt = self.client.post("/api/prompt/generate",
+                                  json={"session_id": up["session_id"], "instruction": "x"}).json()["prompt"]
+        self.assertNotIn("Colombo", prompt)
+
+    def test_files_that_fail_the_check_are_reported_as_rules_only(self):
+        self.service.ner = self._detector_over_files(b"x", "0" * 64)
+        up = self.client.post("/api/upload", files=[
+            ("files", ("atto.txt", b"Testimone Colombo Anna Maria.", "text/plain"))]).json()
+        self.assertEqual(up["documents"][0]["model"], "rifiutato")
+        self.assertEqual(self.client.get("/api/ner/status").json()["state"], "rejected")
+
+    def test_a_failure_wins_over_a_backend_loaded_before_it(self):
+        detector = NerDetector(backend=FakeBackend({}), expected_sha256=None)
+        detector._failure = "RuntimeError: memoria esaurita"
+        self.assertFalse(detector._load())
+
     def test_what_only_the_model_finds_is_masked_in_the_prompt(self):
         text = b"Testimone Colombo Anna Maria nel giudizio 2210/2026."
         up = self.client.post("/api/upload", files=[("files", ("atto.txt", text, "text/plain"))]).json()

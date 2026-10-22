@@ -938,6 +938,12 @@ function renderSkipped() {
     box.style.display = 'block';
 }
 
+const MODEL_STATE_LABELS = {
+  errore: 'il modello ha dato errore',
+  rifiutato: 'file del modello non verificati',
+  interrotto: 'analisi interrotta',
+};
+
 function renderDocumentGrid() {
     renderDocSelector();
     docCount.textContent = state.documents.length;
@@ -971,8 +977,9 @@ function renderDocumentGrid() {
                 <span>${doc.char_count.toLocaleString()} caratteri</span>
             </div>
             ${doc.model === 'ok' ? '<div class="doc-card-source">🧠 Analizzato con regole + modello</div>'
-              : (doc.model === 'interrotto' || doc.model === 'errore')
-                ? `<div class="doc-card-source" style="color:var(--accent-amber);">⚠ Solo regole (${doc.model === 'errore' ? 'il modello ha dato errore' : 'analisi interrotta'})</div>` : ''}
+              : (doc.model === 'interrotto' || doc.model === 'errore' || doc.model === 'rifiutato')
+                ? `<div class="doc-card-source" style="color:var(--accent-amber);">⚠ Solo regole (${MODEL_STATE_LABELS[doc.model]})</div>`
+                : '<div class="doc-card-source" style="color:var(--text-muted);">Solo regole (modello non usato)</div>'}
             <div style="margin-top:8px;"><button type="button" class="preflight-btn card-remove">🗑 Rimuovi dalla pratica</button></div>
         `;
         card.querySelector('.card-remove').addEventListener('click', () =>
