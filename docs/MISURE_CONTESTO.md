@@ -9,7 +9,7 @@
 
 ## 1. Executive Summary
 
-L'analisi del corpus di regressione sintetico con il benchmark [`tools/benchmark_detectors.py`](file:///D:/Share/py/CRYPTO-IDE/tools/benchmark_detectors.py) a sole regole deterministiche (senza modello neurale) attesta le seguenti metriche di base:
+L'analisi del corpus di regressione sintetico con il benchmark [`tools/benchmark_detectors.py`](../tools/benchmark_detectors.py) a sole regole deterministiche (senza modello neurale) attesta le seguenti metriche di base:
 
 * **Occorrenze gold ancora leggibili**: **0 / 54 (0.0% fughe)**
 * **Documenti con almeno una fuga**: **0 / 3**

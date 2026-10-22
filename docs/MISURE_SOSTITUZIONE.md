@@ -25,7 +25,7 @@
 
 ## 2. Metodologia di Misura e Riproducibilità
 
-Il benchmark [`tools/bench_replace.py`](file:///D:/Share/py/CRYPTO-IDE/tools/bench_replace.py) garantisce riproducibilità numerica:
+Il benchmark [`tools/bench_replace.py`](../tools/bench_replace.py) garantisce riproducibilità numerica:
 - **Seed deterministico**: `seed=42` per la generazione sintetica di testi ed entità.
 - **Misura Cold autentica**: invocazione di `re.purge()` prima della run cold per garantire che la regex venga effettivamente compilata da zero senza beneficiare della cache interna del modulo `re`.
 - **Misura Warm**: minimo su 3 ripetizioni a regex già compilata e caricata.
