@@ -295,6 +295,24 @@ class EntityRemove(BaseModel):
     session_id: str
     token: str
 
+class EntityMerge(BaseModel):
+    session_id: str
+    source_token: str
+    target_token: str
+
+@app.post("/api/entity/merge")
+async def merge_entities(data: EntityMerge):
+    """Two entries the user recognises as the same party share one code from now on."""
+    with doc_service.state_lock:
+        session = doc_service.get_or_create_session(data.session_id)
+        anonymizer = session["anonymizer"]
+        try:
+            anonymizer.merge_entities(data.source_token, data.target_token)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        doc_service.persist(data.session_id)
+        return {"status": "success", "entities": anonymizer.get_registry()}
+
 @app.post("/api/entity/remove")
 async def remove_entity(data: EntityRemove):
     with doc_service.state_lock:

@@ -1094,11 +1094,75 @@ function renderEntities(filter = "") {
             <td><span class="category-tag">${escapeHtml(item.category)}</span></td>
             <td><span class="token-badge">${escapeHtml(item.token)}</span></td>
             <td>
+                <button class="btn-text entity-merge" data-token="${escapeHtml(item.token)}" title="Dice che questa voce e un'altra sono la stessa">Unisci a…</button>
                 <button class="btn-text" style="color:var(--accent-rose);" onclick="removeEntity('${escapeHtml(item.token)}')">Rimuovi</button>
             </td>
         `;
         entityTableBody.appendChild(tr);
     });
+}
+
+// "Unisci a…": the user tells that two entries are the same party; they will share ONE code
+entityTableBody.addEventListener('click', (e) => {
+    const btn = e.target.closest('.entity-merge');
+    if (!btn) return;
+    e.stopPropagation();
+    const source = state.entities.find(x => x.token === btn.dataset.token);
+    if (!source) return;
+    openEntityPopover(btn, state.entities.filter(x => x.token !== source.token), async (target) => {
+        if (!confirm(`«${source.original}» e «${target.original}» diventano la stessa parte, con il codice ${target.token}. Procedere?`)) return;
+        const resp = await fetch('/api/entity/merge', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({session_id: state.sessionId, source_token: source.token, target_token: target.token})
+        });
+        const data = await resp.json();
+        if (!resp.ok) { alert(data.detail || 'Unione non riuscita.'); return; }
+        state.entities = data.entities;
+        renderEntities(entitySearch ? entitySearch.value.toLowerCase() : "");
+        refreshPreflight();
+    });
+});
+
+// A small floating list with a search box to pick ONE of the protected entries
+function openEntityPopover(anchor, entities, onPick) {
+    closeCategoryPopover();
+    const box = document.createElement('div');
+    box.className = 'ctx-menu cat-popover';
+    const rect = anchor.getBoundingClientRect();
+    box.style.position = 'fixed';
+    box.style.left = `${Math.max(8, Math.min(rect.left - 120, window.innerWidth - 300))}px`;
+    box.style.top = `${rect.bottom + 4}px`;
+    box.addEventListener('click', (ev) => ev.stopPropagation());
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'cat-search';
+    input.placeholder = 'Cerca la voce con cui unire…';
+    const list = document.createElement('div');
+    list.className = 'cat-list';
+    box.append(input, list);
+    function render() {
+        const q = input.value.trim();
+        const rows = entities.map(x => ({x, s: fuzzyScore(q, x.original)})).filter(r => r.s >= 0)
+            .sort((a, b) => b.s - a.s).slice(0, 12);
+        list.textContent = '';
+        rows.forEach(({x}) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'cat-row';
+            b.textContent = `${x.original}  ·  ${x.token}`;
+            b.addEventListener('mousedown', (ev) => { ev.preventDefault(); closeCategoryPopover(); onPick(x); });
+            list.appendChild(b);
+        });
+        if (!rows.length) list.textContent = 'Nessuna voce corrispondente.';
+    }
+    input.addEventListener('input', render);
+    input.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') { const first = list.querySelector('.cat-row'); if (first) first.dispatchEvent(new MouseEvent('mousedown')); ev.preventDefault(); }
+    });
+    render();
+    document.body.appendChild(box);
+    pickerPopover = box;
+    setTimeout(() => input.focus(), 0);
 }
 
 async function removeEntity(token) {

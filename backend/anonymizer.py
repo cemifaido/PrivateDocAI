@@ -756,6 +756,19 @@ class DeterministicAnonymizer:
             del self.forward_map[key]
             self._aliases.discard(key)
 
+    def merge_entities(self, source_token: str, target_token: str) -> None:
+        """
+        The user says two entries are the same party ("Pippo s.p.a." and "Pippo"): the source's code
+        becomes the target's, now and in every later upload of the case (the written forms stay known).
+        """
+        if source_token == target_token or source_token not in self.reverse_map or target_token not in self.reverse_map:
+            raise ValueError("Scegli due voci diverse tra quelle protette.")
+        for entry in self.registry:
+            if entry["token"] == target_token:
+                entry["manual"] = True      # chosen by the user: never garbage-collected
+        self._merge_tokens(source_token, target_token)
+        self._rebuild_aliases()
+
     def update_entity(self, token: str, new_original: str):
         if token in self.reverse_map:
             self._drop_keys_for_token(token)
