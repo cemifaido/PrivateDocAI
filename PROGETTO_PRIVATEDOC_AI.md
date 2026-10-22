@@ -159,3 +159,17 @@ Rischi segnalati dalla revisione critica e stato:
   - Il controllo pre-invio usa `POST` con il corpo JSON, perché la richiesta dell'utente può contenere dati personali e non deve finire nell'indirizzo o nei log.
   - La conferma sulle parole sospette riguarda l'elenco esatto di quel momento (`confirmed_suspects`): un «sì» vecchio non autorizza parole comparse dopo.
   - L'archivio v2 richiede che l'identificativo dentro il file coincida con quello della pratica.
+
+## 11. Termini Definiti negli Atti
+
+Negli atti le parti sono definite con formule del tipo `Delta Mutual Insurance Europe SE (d'ora in avanti, “Compagnia” o “Delta”)`. La regola (deterministica, in `backend/anonymizer.py`) è:
+- **Un nome** (marchio, sigla, altro nome proprio, con o senza virgolette) ricevuto in una definizione ottiene **lo stesso codice** della parte definita: `[SOCIETA_1] (d'ora in avanti denominata [SOCIETA_1])` mantiene un solo soggetto nel ragionamento.
+- **Una parola di ruolo** d'uso comune (`LEGAL_ROLE_WORDS`: Compagnia, Contraente, Società, Polizza, Socio di Maggioranza, Attrice, Convenuta…) **non si maschera e non diventa un'entità**: la frase di definizione resta nel testo e il modello capisce da sola chi è.
+- **«rispettivamente»:** solo l'ultimo gruppo di termini si lega alla parte subito prima della parentesi; i termini degli altri gruppi, se sembrano nomi, finiscono tra i sospetti da decidere.
+- **Sigle** (es. `TI`): si cercano solo con le maiuscole esatte, per non toccare parole come «ti».
+- **Nome senza forma societaria** (`Zeta Holding` per `Zeta Holding s.p.a.`): stesso codice della società, non una persona.
+- Un termine scelto dall'utente a mano non viene mai ripreso dalla regola; le definizioni si salvano nella pratica.
+- **Ambito:** il codice di una parte vale in tutta la pratica, ma il legame con un nome definito vale **solo nel documento che lo definisce**; nello stesso atto o con il nome presente in un altro atto senza definizione, il nome viene segnalato come sospetto invece di essere presunto. Le definizioni di un documento rimosso o scartato spariscono con lui.
+- **Formule coperte:** d'ora in avanti/innanzi, di seguito, qui di seguito, in seguito, nel seguito, nel prosieguo (anche), in appresso, per brevità, c.d., denominata/detta/definita/chiamata, «anche», definizioni senza parentesi, sigle in parentesi o «con sigla».
+- **Nuovi dati con regole:** R.G., polizza, sinistro, pratica, protocollo, REA, SDI, CIG, CUP, estremi catastali, telaio/VIN, documento d'identità, BIC, matricola.
+- Limiti: non si gestiscono i plurali («le Compagnie») né le definizioni scritte senza virgolette fuori dalle parentesi. Si è scelta una regola e non un modello linguistico perché è prevedibile, verificabile con test e non può «dimenticare» in silenzio un dato.

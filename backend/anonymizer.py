@@ -2,6 +2,15 @@ import re
 import uuid
 from typing import Dict, List, Any, Optional
 
+# How acts introduce a short name for a party: "(d'ora in avanti “X”)", ", di seguito “X”," ...
+_INTRO_WORDS = (
+    r"d[’']ora\s+(?:in\s+avanti|innanzi)|qui\s+di\s+seguito|di\s+seguito|in\s+seguito|nel\s+seguito|"
+    r"(?:nel|in)\s+prosieguo|in\s+appresso|per\s+brevit[àa]|breviter|c\.d\.|cosiddett[oa]|"
+    r"hereinafter(?:\s+referred\s+to\s+as|\s+called)?|anche|detta|detto|denominat[ao]|definit[ao]|chiamat[ao]"
+)
+_QUOTE_OPEN, _QUOTE_CLOSE = "[“\"«]", "[”\"»]"
+
+
 class DeterministicAnonymizer:
     """
     Deterministic Pseudonymization and Re-identification Engine.
@@ -100,6 +109,44 @@ class DeterministicAnonymizer:
         r')'
     )
 
+    # Words that name a ROLE in an act ("la Compagnia", "il Contraente"), not a person or company.
+    # They are common usage: they stay readable, and the definition sentence that links them to
+    # the masked party ("[SOCIETA_A] (d'ora in avanti “Compagnia”)") is kept in the text.
+    LEGAL_ROLE_WORDS = {
+        'compagnia', 'societa', 'società', 'contraente', 'assicurato', 'assicuratore', 'assicuratrice',
+        'attore', 'attrice', 'convenuto', 'convenuta', 'appellante', 'appellato', 'appellata',
+        'ricorrente', 'resistente', 'opponente', 'opposto', 'opposta', 'chiamato', 'chiamata',
+        'terzo', 'terza', 'garante', 'fideiussore', 'cedente', 'cessionario', 'cessionaria',
+        'locatore', 'locatrice', 'conduttore', 'conduttrice', 'venditore', 'venditrice', 'acquirente',
+        'committente', 'appaltatore', 'appaltatrice', 'fornitore', 'fornitrice', 'cliente', 'mandante',
+        'mandatario', 'mandataria', 'socio', 'soci', 'azionista', 'controllante', 'controllata',
+        'capogruppo', 'banca', 'istituto', 'ente', 'azienda', 'impresa', 'gruppo', 'parte', 'parti',
+        'polizza', 'contratto', 'accordo', 'convenzione', 'atto', 'lettera', 'garanzia', 'finanziatore',
+        'mutuante', 'mutuatario', 'debitore', 'creditore', 'datore', 'lavoratore', 'dipendente',
+        'professionista', 'consulente', 'perito', 'ctu', 'ctp', 'tribunale', 'giudice', 'curatore',
+        'liquidatore', 'amministratore', 'sindaco', 'revisore', 'maggioranza', 'minoranza',
+        'company', 'client', 'borrower', 'lender', 'seller', 'buyer', 'contractor', 'subcontractor',
+        'employer', 'employee', 'licensor', 'licensee', 'plaintiff', 'defendant', 'insurer', 'insured',
+        'party', 'parties', 'agreement', 'policy',
+    }
+    STOPWORDS = STOPWORDS | LEGAL_ROLE_WORDS
+
+    _DEF_PAREN = re.compile(r"\(([^()]{1,240})\)")
+    _DEF_INTRO = re.compile(rf"(?i:{_INTRO_WORDS})")
+    _QUOTED_TERM = re.compile(rf"{_QUOTE_OPEN}([^”\"»]{{1,80}}){_QUOTE_CLOSE}")
+    # ", di seguito “X” o “Y”," written without parentheses
+    _INLINE_DEF = re.compile(
+        rf"(?:,\s*|\s+)(?i:{_INTRO_WORDS})(?:[,\s]+(?i:anche|rispettivamente|denominat[ao]|detta|detto))*[,\s:–-]+"
+        rf"({_QUOTE_OPEN}[^”\"»]{{1,80}}{_QUOTE_CLOSE}(?:\s*(?:,|;|\be\b|\bed\b|\bo\b|\boppure\b)\s*"
+        rf"{_QUOTE_OPEN}[^”\"»]{{1,80}}{_QUOTE_CLOSE})*)")
+    _UNQUOTED_TERM = re.compile(
+        r"(?i:denominat[ao]|detta|detto|definit[ao]|chiamat[ao])\s+"
+        r"([A-ZÀ-Ý][\w&'’.-]*(?:\s+(?:(?:di|del|della|dei|degli|delle)\s+)?[A-ZÀ-Ý][\w&'’.-]*){0,3})")
+    # a bare acronym "(TI)" / "(sigla: TI)" / "con sigla TI" right after a party
+    _ACRONYM_PAREN = re.compile(r"\(\s*(?:sigla[:\s]+)?([A-Z][A-Z0-9&.]{1,5})\s*\)")
+    _ACRONYM_WITH = re.compile(r"\bcon\s+sigla\s+([A-Z][A-Z0-9&.]{1,5})\b")
+    _LEADING_ARTICLE = re.compile(r"(?i)^(?:il|lo|la|l[’']|i|gli|le|un|uno|una)\s*")
+
     _STRIP_CORP_SUFFIX = re.compile(
         r'(?i:\s+(?:s\.?r\.?l\.?s?|s\.?p\.?a\.?|s\.?a\.?s\.?|s\.?n\.?c\.?|s\.?a\.?p\.?a\.?|s\.?s\.?|s\.?e\.?|s\.?c\.?a?\.?r\.?l\.?|s\.?t\.?p\.?|soc(?:iet[àa])?\.?\s*coop(?:\.|\b)(?:\s*(?:a\s*r\.?l\.?|a\s+responsabilit[àa]\s+limitata))?|societ[àa]\s+(?:a\s+responsabilit[àa]\s+limitata(?:\s+semplificata)?|per\s+azioni|in\s+accomandita(?:\s+per\s+azioni|\s+semplice)?|in\s+nome\s+collettivo|semplice|benefit)|societ[àa]\s+benefit|studio\s+legale|studio\s+associato|ltd\.?|limited|l\.?l\.?c\.?|llc|l\.?l\.?p\.?|llp|inc\.?|incorporated|corp\.?|corporation|plc|p\.?l\.?c\.?|co\.?|company|law\s+firm|gmbh|ag|sa|b\.?v\.?|n\.?v\.?|s\.?l\.?))+$',
         re.IGNORECASE
@@ -136,6 +183,11 @@ class DeterministicAnonymizer:
         self._aliases = set()
         # Surnames shared by different people: not masked alone, flagged by the pre-flight
         self._ambiguous_surnames = set()
+        # Terms defined in the acts ("d'ora in avanti “Pippo”") that point to a masked party:
+        # canonical term -> {"token", "text", "cs"}; kept across saves (they cannot be re-derived)
+        self._defined: Dict[str, Dict[str, Dict[str, Any]]] = {}  # document key -> canonical term -> info
+        # Defined terms that look like names but could not be tied to one party (to be checked)
+        self.unassigned_terms: set = set()
 
     def _letter_label(self, num: int) -> str:
         """Converts 1 -> A, 2 -> B, ..., 26 -> Z, 27 -> AA"""
@@ -195,61 +247,159 @@ class DeterministicAnonymizer:
 
         combined_candidates.sort(key=sort_key)
 
+        # Definitions ("X (d'ora in avanti “Y”)"): role words stay readable and must never turn
+        # into entities of their own; names are linked to X once everything is registered.
+        definitions = [(self._doc_key(doc, i), doc.get("text", ""), self._find_definitions(doc.get("text", "")))
+                       for i, doc in enumerate(documents)]
+        common_terms = {self._norm_term(t) for _, _, defs in definitions for d in defs
+                        for t in d["linked"] + d["unlinked"] if self._is_common_term(t)}
+
         for item in combined_candidates:
             raw = item["raw"]
             cat = item["category"]
             canon = raw.lower().rstrip('.,;:')
-            if canon in self.whitelist:
+            if canon in self.whitelist or self._norm_term(raw) in common_terms:
                 continue
             if canon in self.forward_map:
                 continue
+            self.get_or_create_token(raw, cat)
 
-            token = self.get_or_create_token(raw, cat)
-
-            # Check if this company entity has an immediate legal alias in any document
-            if cat == "SOCIETA":
-                for doc in documents:
-                    doc_text = doc.get("text", "")
-                    aliases = self._extract_legal_aliases_from_text(raw, doc_text)
-                    for alias in aliases:
-                        canon_alias = alias.lower().rstrip('.,;:')
-                        if canon_alias not in self.forward_map and canon_alias not in self.STOPWORDS:
-                            self.forward_map[canon_alias] = token
-                            self._aliases.add(canon_alias)
+        self._link_definitions(definitions)
 
         self._rebuild_aliases()
         return self.get_registry()
 
-    def _extract_legal_aliases_from_text(self, company_name: str, text: str) -> List[str]:
+    # ----- defined terms ("d'ora in avanti ...") -----
+    @staticmethod
+    def _doc_key(doc: Dict[str, Any], index: int = 0) -> str:
+        return str(doc.get("id") or doc.get("filename") or f"doc{index}")
+
+    def _norm_term(self, term: str) -> str:
+        t = " ".join(term.strip().strip("“”\"«»'’").lower().split())
+        t = self._LEADING_ARTICLE.sub("", t).strip()
+        return t.rstrip('.,;:')
+
+    def _is_common_term(self, term: str) -> bool:
+        """A role word or phrase ("Compagnia", "Socio di Maggioranza"): not worth masking."""
+        words = self._norm_term(term).replace("’", " ").replace("'", " ").split()
+        if not words:
+            return True
+        connectors = {"di", "del", "della", "dei", "degli", "delle", "e", "ed", "d"}
+        return words[0] in self.LEGAL_ROLE_WORDS or all(w in self.LEGAL_ROLE_WORDS or w in connectors for w in words)
+
+    def _group_quoted(self, inside: str, quoted) -> List[List[str]]:
+        """Quoted terms in groups: 'o' keeps them together, 'e' / ',' starts a new group."""
+        groups = [[quoted[0].group(1).strip()]]
+        for prev, cur in zip(quoted, quoted[1:]):
+            separator = inside[prev.end():cur.start()]
+            if re.search(r"(?i)\bo\b|\boppure\b|\bor\b", separator):
+                groups[-1].append(cur.group(1).strip())
+            else:
+                groups.append([cur.group(1).strip()])
+        return groups
+
+    def _find_definitions(self, text: str) -> List[Dict[str, Any]]:
         """
-        Extracts defined aliases in legal acts and contracts (IT + EN):
-        e.g. Alfaservizi s.r.l. (d’ora in avanti, “Alfaservizi” o “Attrice”)
-        e.g. Acme Corp. (hereinafter referred to as "Acme" or "Borrower")
-        e.g. Betamedia s.r.l. ("Betamedia")
+        Where the act gives a short name to the party written just before: in parentheses, inline
+        ("..., di seguito “X”,") or as a bare acronym. With "rispettivamente" only the LAST group
+        of terms belongs to that party (the earlier ones refer to earlier items of the sentence).
         """
-        aliases = []
-        if not text:
-            return aliases
-        escaped_name = re.escape(company_name)
-        # Italian & English defined alias patterns (swallowing optional trailing dot before parens)
-        alias_regex = (
-            rf'{escaped_name}\.?\s*\([^)]*?(?:'
-            rf'd[’\']ora\s+in\s+avanti|di\s+seguito|in\s+prosieguo|anche\s+solo|'
-            rf'hereinafter(?:\s+referred\s+to\s+as)?|hereinafter\s+called'
-            rf')?[,\s]*[“"«]([^”"»]+)[”"»]'
-        )
-        for m in re.finditer(alias_regex, text, re.IGNORECASE):
-            cand = m.group(1).strip()
-            # Ignore generic legal role terms (IT + EN)
-            generic_roles = {
-                "attrice", "convenuta", "societa", "società", "compagnia", "terzo chiamato",
-                "parte", "ricorrente", "resistente", "company", "client", "borrower", "lender",
-                "seller", "buyer", "contractor", "subcontractor", "employer", "employee",
-                "licensor", "licensee", "plaintiff", "defendant"
-            }
-            if cand.lower() not in generic_roles and len(cand) >= 3:
-                aliases.append(cand)
-        return aliases
+        found: List[Dict[str, Any]] = []
+        for m in self._DEF_PAREN.finditer(text):
+            inside = m.group(1)
+            quoted = list(self._QUOTED_TERM.finditer(inside))
+            starts_quoted = re.match(r"\s*[“\"«]", inside) is not None
+            acronym = self._ACRONYM_PAREN.fullmatch(m.group(0))
+            if acronym:
+                found.append({"start": m.start(), "linked": [acronym.group(1)], "unlinked": []})
+                continue
+            if not (self._DEF_INTRO.search(inside) or starts_quoted):
+                continue
+            groups: List[List[str]] = []
+            if quoted:
+                groups = self._group_quoted(inside, quoted)
+            else:
+                un = self._UNQUOTED_TERM.search(inside)
+                if un:
+                    groups = [[un.group(1).strip().rstrip('.,;:')]]
+            if not groups:
+                continue
+            respectively = re.search(r"(?i)rispettivamente|respectively", inside) is not None
+            linked = groups[-1] if respectively else [t for g in groups for t in g]
+            unlinked = [t for g in groups[:-1] for t in g] if respectively else []
+            found.append({"start": m.start(), "linked": linked, "unlinked": unlinked})
+
+        for m in self._INLINE_DEF.finditer(text):
+            quoted = list(self._QUOTED_TERM.finditer(m.group(1)))
+            if quoted:
+                groups = self._group_quoted(m.group(1), quoted)
+                found.append({"start": m.start(), "linked": [t for g in groups for t in g], "unlinked": []})
+        for m in self._ACRONYM_WITH.finditer(text):
+            found.append({"start": m.start(), "linked": [m.group(1)], "unlinked": []})
+        return found
+
+    def _find_antecedent(self, before: str) -> Optional[Dict[str, Any]]:
+        """The registered entity whose name ends right where the definition starts."""
+        tail = " ".join(before.lower().split()).rstrip(" .,;:")
+        best = None
+        for r in self.registry:
+            canon = r["canonical"]
+            if tail.endswith(canon) and (best is None or len(canon) > len(best["canonical"])):
+                best = r
+        return best
+
+    def _merge_tokens(self, src: str, dst: str):
+        """Two codes that turned out to be the same party: src becomes dst everywhere."""
+        if src == dst:
+            return
+        for key in [k for k, v in self.forward_map.items() if v == src]:
+            self.forward_map[key] = dst
+        for scope in self._defined.values():
+            for info in scope.values():
+                if info["token"] == src:
+                    info["token"] = dst
+        self.reverse_map.pop(src, None)
+        self.registry = [r for r in self.registry if r["token"] != src]
+
+    def forget_document(self, doc_key: str):
+        """A removed document takes its own definitions with it."""
+        self._defined.pop(str(doc_key), None)
+
+    def _link_definitions(self, definitions):
+        """
+        Binds each defined name to its party INSIDE the document that defines it: in another act
+        the same word may mean someone else. A name that shows up unbound elsewhere is flagged by
+        the pre-flight as a suspect instead of being guessed.
+        """
+        self.unassigned_terms = set()
+        for doc_key, text, defs in definitions:
+            self._defined.pop(doc_key, None)  # re-read from scratch when the document is analysed again
+            for d in defs:
+                entity = self._find_antecedent(text[:d["start"]])
+                for term in d["unlinked"]:
+                    if not self._is_common_term(term):
+                        self.unassigned_terms.add(term)
+                if entity is None:
+                    continue
+                token = entity["token"]
+                for term in d["linked"]:
+                    if self._is_common_term(term):
+                        continue
+                    canon = self._norm_term(term)
+                    if len(canon) < 2 or canon in self.whitelist:
+                        continue
+                    existing = self.forward_map.get(canon)
+                    if existing == token:
+                        continue  # already masked everywhere with the right code
+                    if existing:
+                        owner = next((r for r in self.registry if r["token"] == existing), None)
+                        if owner is None or not self._is_automatic(owner):
+                            continue  # chosen by the user: not touched
+                        self._merge_tokens(existing, token)
+                        continue
+                    clean = self._LEADING_ARTICLE.sub("", term.strip()).strip()
+                    acronym = clean.isupper() and " " not in clean and len(clean) <= 5
+                    self._defined.setdefault(doc_key, {})[canon] = {"token": token, "text": clean, "cs": acronym}
 
     def _rebuild_aliases(self):
         """
@@ -279,6 +429,18 @@ class DeterministicAnonymizer:
             elif len(tokens) > 1:
                 self._ambiguous_surnames.add(surname)
 
+        # A company written without its legal form ("Zeta Holding") must not be a second, different party
+        company_base = {}
+        for r in self.registry:
+            if r["category"] == "SOCIETA":
+                cleaned = self._STRIP_CORP_SUFFIX.sub("", r["canonical"]).strip()
+                if cleaned and cleaned != r["canonical"]:
+                    company_base.setdefault(cleaned, set()).add(r["token"])
+        for r in list(self.registry):
+            tokens = company_base.get(r["canonical"])
+            if r["category"] == "PERSONA" and self._is_automatic(r) and tokens and len(tokens) == 1:
+                self._merge_tokens(r["token"], next(iter(tokens)))
+
         # Company base brands & aliases
         by_corp_alias: Dict[str, set] = {}
         for r in self.registry:
@@ -301,11 +463,35 @@ class DeterministicAnonymizer:
                 self.forward_map[alias] = next(iter(tokens))
                 self._aliases.add(alias)
 
-    def _build_mask_pattern(self):
+        # Defined terms whose party has been removed are dropped
+        for doc_key in list(self._defined):
+            scope = self._defined[doc_key]
+            for canon in [c for c, info in scope.items() if info["token"] not in self.reverse_map]:
+                del scope[canon]
+            if not scope:
+                del self._defined[doc_key]
+
+    def _defined_for(self, doc_key: Optional[str]) -> Dict[str, Dict[str, Any]]:
+        """Terms defined in one document; for text that belongs to no document (the request), all of them."""
+        if doc_key is not None:
+            return dict(self._defined.get(str(doc_key), {}))
+        merged: Dict[str, Dict[str, Any]] = {}
+        for scope in self._defined.values():
+            for canon, info in scope.items():
+                merged.setdefault(canon, info)
+        return merged
+
+    def _build_mask_pattern(self, doc_key: Optional[str] = None):
         """One combined regex, longest entity first, so the text is scanned once."""
+        defined = self._defined_for(doc_key)
+        keys = set(self.forward_map) | set(defined)
         alternatives = []
-        for key in sorted(self.forward_map, key=len, reverse=True):
+        for key in sorted(keys, key=len, reverse=True):
             body = r"\s+".join(re.escape(part) for part in key.split())
+            info = defined.get(key) if key not in self.forward_map else None
+            if info and info["cs"]:
+                # "TI" must not hit the pronoun "ti": acronyms match their exact capitals only
+                body = "(?-i:" + re.escape(info["text"]) + ")"
             if key[-1].isalnum():
                 dot = r"\.?" if key[-1].isalpha() and "." in key else ""
                 tail = rf"{dot}(?![\w\]])"
@@ -313,18 +499,24 @@ class DeterministicAnonymizer:
                 tail = r"(?=[\s|:,.;)]|$)(?!\])"
             alternatives.append(body + tail)
         if not alternatives:
-            return None
-        return re.compile(r"(?<![\w\[])(?:" + "|".join(alternatives) + ")", re.IGNORECASE)
+            return None, defined
+        return re.compile(r"(?<![\w\[])(?:" + "|".join(alternatives) + ")", re.IGNORECASE), defined
 
-    def mask_text(self, text: str) -> str:
-        """Replaces all detected entities (and surname/brand aliases) with their tokens."""
-        pattern = self._build_mask_pattern()
+    def mask_text(self, text: str, doc_key: Optional[str] = None) -> str:
+        """Replaces all detected entities, their aliases and the terms defined in `doc_key` with their tokens."""
+        pattern, defined = self._build_mask_pattern(doc_key)
         if pattern is None:
             return text
 
+        def lookup(key: str) -> Optional[str]:
+            if key in self.forward_map:
+                return self.forward_map[key]
+            info = defined.get(key)
+            return info["token"] if info else None
+
         def to_token(m):
             found = " ".join(m.group(0).lower().split())
-            return self.forward_map.get(found) or self.forward_map.get(found.rstrip(".,;:"), m.group(0))
+            return lookup(found) or lookup(found.rstrip(".,;:")) or m.group(0)
 
         return pattern.sub(to_token, text)
 
@@ -382,6 +574,10 @@ class DeterministicAnonymizer:
             if surname not in (w.lower() for w in suspects) and re.search(
                     rf'(?<![\w\[]){re.escape(surname)}(?![\w\]])', without_tokens, re.IGNORECASE):
                 suspects.append(surname.title())
+        for term in sorted(self.unassigned_terms):
+            if term not in suspects and re.search(
+                    rf'(?<![\w\[]){re.escape(term)}(?![\w\]])', without_tokens, re.IGNORECASE):
+                suspects.append(term)
         return suspects
 
     def _drop_keys_for_token(self, token: str):
@@ -420,6 +616,9 @@ class DeterministicAnonymizer:
         return token
 
     def _forget_token(self, token: str):
+        for scope in self._defined.values():
+            for canon in [c for c, info in scope.items() if info["token"] == token]:
+                del scope[canon]
         self._drop_keys_for_token(token)
         self.reverse_map.pop(token, None)
         self.registry = [r for r in self.registry if r["token"] != token]
@@ -465,6 +664,7 @@ class DeterministicAnonymizer:
             "whitelist": sorted(self.whitelist),
             "forward_map": {k: v for k, v in self.forward_map.items() if k not in self._aliases},
             "reverse_map": dict(self.reverse_map),
+            "defined_aliases": {k: dict(v) for k, v in self._defined.items()},
         }
 
     @classmethod
@@ -475,17 +675,24 @@ class DeterministicAnonymizer:
         anonymizer.whitelist = set(data.get("whitelist", []))
         anonymizer.forward_map = dict(data.get("forward_map", {}))
         anonymizer.reverse_map = dict(data.get("reverse_map", {}))
+        anonymizer._defined = {k: dict(v) for k, v in data.get("defined_aliases", {}).items()}
         anonymizer._rebuild_aliases()
         return anonymizer
 
     def _detect_entities(self, text: str) -> List[Dict[str, str]]:
-        entities = self._detect_identifiers(text)
+        references = self._detect_references(text)
+        # blank the references first: digits inside a VIN or a CUP must not be read as a phone number
+        without_refs = text
+        for ref in references:
+            without_refs = without_refs.replace(ref["raw"], " " * len(ref["raw"]))
+        entities = self._detect_identifiers(without_refs)
+        entities += references
         b_entities = self._detect_business_data(text)
         entities += b_entities
 
         # Blank out detected business entities so bare person patterns do not match substrings of company names
         working_text = text
-        for b in b_entities:
+        for b in b_entities + references:
             raw = b["raw"]
             working_text = working_text.replace(raw, " " * len(raw))
 
@@ -534,6 +741,41 @@ class DeterministicAnonymizer:
         for m in re.finditer(plate_pattern, working_text, re.IGNORECASE):
             entities.append({"raw": m.group(0), "category": "TARGA"})
         return entities
+
+    # Identifiers that follow a keyword ("polizza n. ...", "CIG ...", "Foglio 21, particella 345").
+    # (category, keyword-led pattern; the capture group is the value to mask, or the whole match)
+    _REFERENCE_PATTERNS = [
+        ("RIFERIMENTO", re.compile(
+            r"(?i)\b(?:polizza|sinistro|pratica|protocollo|fascicolo|repertorio|rep\.|(?:n\.?\s*)?R\.?\s?G\.?(?:\s?N\.?)?)"
+            r"\s*(?:n\.?|nr\.?|numero|n°)?\s*[:.]?\s*([A-Z0-9][A-Z0-9/.\-]*\d[A-Z0-9/.\-]*)")),
+        ("RIFERIMENTO", re.compile(r"(?i)\bREA\s*[:.]?\s*([A-Z]{2}\s*[-–]?\s*\d{5,8})\b")),
+        ("RIFERIMENTO", re.compile(r"(?i)\b(?:codice\s+destinatario|codice\s+univoco|SDI)\s*[:.]?\s*([A-Z0-9]{7})\b")),
+        ("RIFERIMENTO", re.compile(r"(?i)\bCIG\s*[:.]?\s*([A-Z0-9]{10})\b")),
+        ("RIFERIMENTO", re.compile(r"(?i)\bCUP\s*[:.]?\s*([A-Z]\d{2}[A-Z]\d{11})\b")),
+        ("CATASTO", re.compile(
+            r"(?i)\b(?:foglio|fg\.?)\s*\d+[\s,;]*(?:particella|part\.?|p\.lla|mapp(?:ale)?\.?)\s*\d+"
+            r"(?:[\s,;]*sub(?:alterno)?\.?\s*\d+)?")),
+        ("TELAIO", re.compile(r"(?i)\b(?:telaio|VIN)\s*(?:n\.?)?\s*[:.]?\s*([A-HJ-NPR-Z0-9]{17})\b")),
+        ("DOC_IDENTITA", re.compile(
+            r"(?i)\b(?:passaporto|patente(?:\s+di\s+guida)?|carta\s+d[’']identit[àa]|C\.?I\.?E\.?)"
+            r"\s*(?:n\.?|nr\.?|numero|n°)?\s*[:.]?\s*([A-Z0-9]{6,12})\b")),
+        ("BIC", re.compile(r"(?i)\b(?:BIC|SWIFT)\s*[:/-]?\s*([A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?)\b")),
+        ("MATRICOLA", re.compile(r"(?i)\bmatricola\s*(?:n\.?|nr\.?|numero|n°)?\s*[:.]?\s*([A-Z0-9][A-Z0-9-]{2,11})\b")),
+    ]
+
+    def _detect_references(self, text: str) -> List[Dict[str, str]]:
+        found = []
+        for category, pattern in self._REFERENCE_PATTERNS:
+            for m in pattern.finditer(text):
+                raw = (m.group(1) if m.groups() else m.group(0)).strip().rstrip(".,;:-/")
+                has_digit = any(c.isdigit() for c in raw)
+                if category in ("RIFERIMENTO", "DOC_IDENTITA", "MATRICOLA", "TELAIO") and not has_digit:
+                    continue  # a word, not a number ("pratica legale", "patente di guida")
+                if category == "RIFERIMENTO" and len(raw) < 5 and "/" not in raw:
+                    continue  # "pratica 12", "protocollo 7": too short to be a reference
+                if len(raw) >= 3:
+                    found.append({"raw": raw, "category": category})
+        return found
 
     @staticmethod
     def _luhn_valid(digits: str) -> bool:

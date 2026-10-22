@@ -260,6 +260,9 @@ class DocumentService:
         """Undo an interrupted upload operation: its documents, skipped-file reports and entities."""
         with self._state_lock:
             session = self.get_or_create_session(session_id)
+            for d in session["documents"]:
+                if d.get("operation_id") == operation_id:
+                    session["anonymizer"].forget_document(d["id"])
             session["documents"] = [d for d in session["documents"] if d.get("operation_id") != operation_id]
             session["skipped"] = [s for s in session.get("skipped", []) if s.get("operation_id") != operation_id]
             session["anonymizer"].remove_by_operation(operation_id)
@@ -275,6 +278,7 @@ class DocumentService:
         """
         with self._state_lock:
             session = self.get_or_create_session(session_id)
+            session["anonymizer"].forget_document(doc_id)
             session["documents"] = [d for d in session["documents"] if d["id"] != doc_id]
             purged = 0
             if purge:
@@ -335,7 +339,7 @@ class DocumentService:
         for doc in session["documents"]:
             if not doc.get("selected", True):
                 continue
-            masked_text = anonymizer.mask_text(doc.get("text", ""))
+            masked_text = anonymizer.mask_text(doc.get("text", ""), doc_key=doc.get("id"))
             masked_docs.append({
                 "number": doc["number"],
                 "filename": doc["filename"],

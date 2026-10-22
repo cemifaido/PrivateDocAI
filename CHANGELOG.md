@@ -2,6 +2,16 @@
 
 Formato ispirato a [Keep a Changelog](https://keepachangelog.com/it/1.1.0/); le date sono nel formato AAAA-MM-GG.
 
+## [Non rilasciato]
+
+### Aggiunto
+- Nuovi dati riconosciuti con regole: numeri di ruolo (R.G.), polizza, sinistro, pratica, protocollo, REA, codice destinatario/SDI, CIG, CUP, estremi catastali completi (foglio, particella, subalterno), telaio/VIN, documento d'identità (carta, passaporto, patente), BIC/SWIFT e matricola.
+- Altre formule di definizione negli atti: «d'ora innanzi», «qui di seguito», «nel seguito», «in appresso», «per brevità», «nel prosieguo anche», definizioni senza parentesi («..., di seguito “X”,»), sigle tra parentesi o con «con sigla».
+
+### Modificato
+- I termini definiti valgono **nel documento che li definisce**: in un altro atto la stessa parola non viene presunta (se compare senza definizione viene segnalata come sospetta); le definizioni di un documento rimosso spariscono con lui.
+- Termini definiti negli atti («d'ora in avanti», «di seguito», «in seguito», «nel prosieguo», «detta/denominata…»): un nome, una sigla o un secondo nome della stessa parte riceve **lo stesso codice** della parte definita, anche senza virgolette (`Zeta Holding s.p.a. (d'ora in avanti denominata Omega)`); le parole di ruolo di uso comune (Compagnia, Contraente, Società, Socio di Maggioranza…) restano leggibili e non diventano mai entità. Con «rispettivamente» si lega solo l'ultimo gruppo; le sigle si cercano solo con le maiuscole esatte. Il nome di una società scritto senza la forma societaria non è più una seconda entità. Le definizioni sopravvivono al salvataggio e alla riapertura della pratica.
+
 ## [0.1.0] - 2026-10-21
 
 Prima versione pubblicata.
