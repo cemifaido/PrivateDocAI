@@ -30,7 +30,7 @@ documenti ──► lettura locale ──► riconoscimento dati ──► testo
 - **Scelta dei documenti** da includere nella richiesta («confronta il Documento 3 con il 7»), con numerazione fissa; i nomi dei file non vengono inviati.
 - **Caricamenti grandi:** contatore dei file mancanti, interruzione (tenendo o scartando quanto caricato), OCR in parallelo.
 - **File non supportati** (ad esempio le foto) elencati con nome, percorso e motivo, invece di essere ignorati in silenzio.
-- **Riconoscimento avanzato facoltativo:** un modello locale (MIT, su CPU, scaricato a parte) si affianca alle regole per nomi in contesto, società, numeri di ruolo e dati catastali; la barra laterale mostra sempre se è attivo. Il ripristino della risposta tollera i codici alterati dal modello e li segnala; IBAN, codice fiscale e partita IVA hanno validatori di formato. Vedi [`NOTICE.md`](NOTICE.md) e le sezioni 12 e 13 di [`PROGETTO_PRIVATEDOC_AI.md`](PROGETTO_PRIVATEDOC_AI.md).
+- **Riconoscimento avanzato facoltativo:** un modello locale (MIT, su CPU) si affianca alle regole per nomi in contesto, società, numeri di ruolo e dati catastali. Se manca, la barra laterale permette di scaricarlo solo dopo consenso esplicito; ogni file è verificato con SHA-256 prima dell'attivazione. Il ripristino della risposta tollera i codici alterati dal modello e li segnala; IBAN, codice fiscale e partita IVA hanno validatori di formato. Vedi [`NOTICE.md`](NOTICE.md) e le sezioni 12-14 di [`PROGETTO_PRIVATEDOC_AI.md`](PROGETTO_PRIVATEDOC_AI.md).
 - **Guida in-app** (`/guida`) con uso, limiti e riferimenti normativi.
 
 ## Avvio rapido
@@ -65,7 +65,7 @@ Variabili utili: `PRIVATEDOC_PORT`, `PRIVATEDOC_DATA_DIR`, `PRIVATEDOC_NO_BROWSE
 - Il rilevamento si basa su regole (e, se installato, su un modello locale facoltativo): nomi insoliti o dati scritti in modo anomalo possono sfuggire. I fatti descritti nel testo possono identificare le persone anche senza nomi.
 - **ChatGPT e Claude non sono automatizzabili:** i loro siti bloccano i browser automatici (e il programma non cerca di aggirare i controlli). Si usa «Copia & Decifra».
 - L'OCR gira su CPU: circa 6-10 secondi a pagina; 100 pagine scansionate richiedono circa 10 minuti.
-- Una pratica sostituita con una copia più vecchia della stessa non viene riconosciuta (serve un'ancora esterna).
+- Una pratica sostituita con una copia più vecchia della stessa non viene riconosciuta. Un'ancora esterna è stata analizzata ma non viene implementata ora: aumenterebbe complessità e rischio di blocco senza proteggere dal ripristino congiunto o da un amministratore locale.
 - Le immagini incorporate in Word, PDF con testo o email non vengono lette.
 - Il programma non gestisce l'informativa al cliente, la base giuridica, i contratti con il fornitore di IA né la valutazione d'impatto: restano a carico di chi lo usa.
 
@@ -76,7 +76,7 @@ GDPR (art. 4 n. 5, considerando 26, artt. 5, 25, 28, 32, 35, 44-49), linee guida
 ## Sviluppo
 
 ```bash
-python -m unittest discover -s tests     # circa 140 test
+python -m unittest discover -s tests     # 156 test al 22/10/2026
 python test_pipeline.py                  # collaudo end-to-end su uno ZIP multi-formato
 ruff check .
 python tools/run_gates.py                # ruff + test + benchmark sul corpus inventato (fallisce se un dato resta leggibile)
@@ -85,6 +85,8 @@ python tools/run_gates.py                # ruff + test + benchmark sul corpus in
 Struttura: `app.py` (API FastAPI) · `backend/` (estrazione, anonimizzazione, archivio cifrato, servizio, bridge browser) · `static/` (interfaccia e guida) · `tests/` · `PrivateDocAI.spec` e `build_exe.bat` (eseguibile) · `check_dist.py` (controllo pre-distribuzione) · `tools/` (benchmark e controlli automatici, corpus di prova inventato).
 
 La documentazione tecnica completa (architettura, scelte, revisione di sicurezza) è in [`PROGETTO_PRIVATEDOC_AI.md`](PROGETTO_PRIVATEDOC_AI.md).
+
+Le analisi della Milestone 2 sono conservate in [`docs/ANALISI_VAULT.md`](docs/ANALISI_VAULT.md), [`docs/PROTOTIPO_ONNX_INT8.md`](docs/PROTOTIPO_ONNX_INT8.md), [`docs/MISURE_SOSTITUZIONE.md`](docs/MISURE_SOSTITUZIONE.md), [`docs/MISURE_CONTESTO.md`](docs/MISURE_CONTESTO.md) e [`docs/DISEGNO_DOWNLOAD_MODELLO.md`](docs/DISEGNO_DOWNLOAD_MODELLO.md). In sintesi: INT8 non entra nel prodotto perché perde richiamo sulle carte di pagamento; Aho-Corasick non entra perché la regex è già rapida alle dimensioni normali e il prototipo non è semanticamente equivalente; l'anti-rollback è rimandato perché un'ancora locale non copre ripristini congiunti o amministratori locali e non deve rischiare di bloccare l'utente. Il download manager è invece implementato; installer e firma restano rimandati perché richiedono identità di firma, certificato, gestione della reputazione SmartScreen e collaudo su installazioni Windows reali.
 
 ## Licenza
 

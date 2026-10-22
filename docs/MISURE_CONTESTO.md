@@ -14,11 +14,11 @@ L'analisi del corpus di regressione sintetico con il benchmark [`tools/benchmark
 * **Occorrenze gold ancora leggibili**: **0 / 54 (0.0% fughe)**
 * **Documenti con almeno una fuga**: **0 / 3**
 * **Richiamo (Recall)**: **1.00 (100%)**
-* **Precisione (Precision)**: **0.96 (96.4%)**
-* **F1 Score**: **0.98 (98.2%)**
+* **Precisione (Precision)**: **1.00 (100%)**
+* **F1 Score**: **1.00 (100%)**
 
 L'analisi di dettaglio chiarisce due aspetti fondamentali:
-1. **Falsi Positivi reali**: Nel corpus attuale emergono **2 maschere spurie** (`Catasto Fabbricati` e `The Service`), causate dall'euristica generica che scambia due parole maiuscole contigue per un nome di persona. La loro eliminazione è affidata all'intervento di Claude su `backend/anonymizer.py`.
+1. **Falsi Positivi corretti**: La misura iniziale mostrava **2 maschere spurie** (`Catasto Fabbricati` e `The Service`), causate dall'euristica generica che scambiava due parole maiuscole contigue per un nome di persona. Le esclusioni deterministiche implementate in `backend/anonymizer.py` le hanno eliminate; il benchmark corrente conferma precisione, richiamo e F1 pari a 1,00.
 2. **Toponimi lasciati in chiaro (scelta di progetto, non errore)**: I nomi di città isolate (`Monza`, `Bergamo`, `Milano`, `London`) **non sono falsi negativi o fughe della lista gold**. La loro esclusione dal profilo base è una scelta deliberata di prodotto per preservare la leggibilità e il contesto geografico degli atti legali; sono invece catturate dal "profilo esteso" opzionale.
 
 ---
@@ -30,23 +30,23 @@ L'analisi di dettaglio chiarisce due aspetti fondamentali:
   ```text
   ...censito al Catasto Fabbricati, Foglio 14, particella 280, sub. 3.
   ```
-* **Comportamento attuale**:
+* **Comportamento prima della correzione**:
   - Classificato come `PERSONA_1`: `[PERSONA_1], Foglio 14, particella 280, sub. 3`.
 * **Causa tecnica**:
   - La regola per `PERSONA` cattura due parole contigue con iniziale maiuscola (`Catasto Fabbricati`).
-* **Risoluzione prevista**:
-  - Aggiunta di locuzioni catastali e amministrative standard a una lista di esclusione per `PERSONA`.
+* **Risoluzione implementata**:
+  - Aggiunta di locuzioni catastali e amministrative standard alla lista di esclusione per `PERSONA`.
 
 ### Caso 2: `The Service` (`service_agreement_en.txt`)
 * **Testo nel documento**:
   ```text
   The Service Provider agrees to deliver the consulting deliverables...
   ```
-* **Comportamento attuale**:
+* **Comportamento prima della correzione**:
   - Classificato come `PERSONA_4`: `[PERSONA_4] Provider agrees to deliver...`.
 * **Causa tecnica**:
   - L'articolo determinativo `The` a inizio periodo maiuscolo seguito dal sostantivo `Service` (ruolo contrattuale).
-* **Risoluzione prevista**:
+* **Risoluzione implementata**:
   - Esclusione da `PERSONA` per articoli e determinativi inglesi iniziali seguiti da termini di ruolo contrattuale.
 
 ---
@@ -75,9 +75,9 @@ Il **Context Boosting** consiste nell'utilizzare parole spia (trigger words) nel
 
 ---
 
-## 5. Simulazione Teorica dei Benefici
+## 5. Esito Verificato
 
-Eliminando i 2 falsi positivi reali (`Catasto Fabbricati` e `The Service`) tramite i trigger negativi:
+Dopo l'eliminazione dei 2 falsi positivi reali (`Catasto Fabbricati` e `The Service`) tramite esclusioni mirate:
 - **Precisione**: sale da **0.96 a 1.00**
 - **Richiamo**: confermato a **1.00** (0 fughe)
 - **F1 Score**: sale da **0.98 a 1.00**

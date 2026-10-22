@@ -5,6 +5,8 @@
 **Riferimento Piano**: Milestone 2/3 - Fase 1, Compito (b)
 **Destinatari**: Team PrivateDoc AI (Claude, Codex, Gemini, Operatore Umano)
 
+**Stato di attuazione**: implementato su `main` il 22 ottobre 2026 in `backend/model_downloader.py`, API e interfaccia, con test dedicati. Le sezioni seguenti conservano il disegno e le motivazioni delle scelte.
+
 ---
 
 ## 1. Principi Guida e Obiettivi
@@ -31,7 +33,7 @@ I repository di modelli su Hugging Face possono aggiornare i branch (incluso `ma
 
 * **Repository**: `rizzoaiacademy/rizzo-pii-0.3B`
 * **Release di riferimento**: `v1.5.0` (rif. `NOTICE.md`)
-* **Commit SHA Hugging Face**: `701dd9a4ef7ecf01f705d9c22dcfc723f03b22fb` *(DA VERIFICARE via API HF prima dell'implementazione definitiva per garantire corrispondenza 1:1 con gli hash)*
+* **Commit SHA Hugging Face**: `a1c3c83827eca22e9675e30c1111c4641caf5901` (risolto dalla tag `v1.5.0` il 22 ottobre 2026 e pinnato nell'implementazione)
 * **Base URL**: `https://huggingface.co/rizzoaiacademy/rizzo-pii-0.3B/resolve/<COMMIT_SHA>/`
 
 ### 2.2 Struttura del Manifest Pinnato (Dati Reali da NOTICE.md)
@@ -44,7 +46,7 @@ MODEL_MANIFEST = {
     "license": "MIT",
     "description": "Modello compatto di Named Entity Recognition per PII italiane su CPU (basato su mmBERT)",
     "repository": "rizzoaiacademy/rizzo-pii-0.3B",
-    "commit_sha": "701dd9a4ef7ecf01f705d9c22dcfc723f03b22fb",  # da validare via API HF
+    "commit_sha": "a1c3c83827eca22e9675e30c1111c4641caf5901",
     "total_size_bytes": 1_264_687_643,  # ~1.265 GB / 1.178 GiB
     "files": {
         "model.safetensors": {
@@ -60,11 +62,11 @@ MODEL_MANIFEST = {
             "sha256": "3b66ca84514d9aacf4b90c65a61e561127c6c21d81bbf4e8ba9d46a4c15ac82d"
         },
         "config.json": {
-            "size_bytes": 1_280,
+            "size_bytes": 3_137,
             "sha256": "6b9d5bdd4a194d40fb40c53fdc302e225514cd7940d97f657c4082454ee7e91b"
         },
         "special_tokens_map.json": {
-            "size_bytes": 650,
+            "size_bytes": 1_051,
             "sha256": "6e3204c5a4004719c185007a745d1940471a6fb02521cfa0a00306dbb6bc5903"
         }
     }
@@ -97,17 +99,17 @@ Su sistema operativo Windows, la funzione `os.replace(src_dir, dst_dir)` fallisc
 Per garantire un'attivazione atomica e sicura su Windows:
 1. **Download in staging isolato**:
    I file vengono scaricati in una cartella di staging temporanea:
-   `data/models/.staging_rizzo_pii_v1.5.0/` con suffisso `.part`.
+   `models/rizzo-pii-0.3B.staging/`; il file in corso usa il suffisso `.part`.
 2. **Calcolo hash progressivo**:
-   L'hash SHA-256 viene calcolato a blocchi (chunk da 64 KB) direttamente in memoria durante lo streaming (`hashlib.sha256().update(chunk)`), azzerando i tempi di rilettura da disco al termine.
+   Lo streaming usa blocchi da 1 MiB; dimensione e SHA-256 vengono verificati sul file completato e nuovamente sull'intera staging prima dell'installazione.
 3. **Attivazione atomica**:
    Al termine della verifica con successo di tutti i 5 hash:
-   - Se la cartella di destinazione finale `data/models/rizzo-pii-0.3B/` non esiste: `os.replace` o `shutil.move` sposta la cartella staging direttamente.
-   - Se esiste già una versione precedente/corrotta: viene rinominata in `.backup_old`, la nuova staging viene rinominata in cartella finale, e solo a esito positivo il backup viene rimosso.
+   - Se la cartella di destinazione finale `models/rizzo-pii-0.3B/` non esiste, `os.replace` sposta la staging direttamente.
+   - Se esiste già una versione precedente/corrotta, viene rinominata in `rizzo-pii-0.3B.old`, la nuova staging diventa la cartella finale e solo a esito positivo il backup viene rimosso; in caso di errore viene ripristinato.
 
 ### 4.2 Ripresa Download (HTTP Range Resume)
 Dato il peso considerevole di `model.safetensors` (1,23 GB), le interruzioni temporanee di rete devono poter riprendere:
-- **Richiesta con Range**: Se esiste un file parziale `.part` da $K$ byte, la richiesta HTTP invia l'header `Range: bytes=K-` e `If-Range: <ETag>`.
+- **Richiesta con Range**: Se esiste un file parziale `.part` da $K$ byte, la richiesta HTTP invia l'header `Range: bytes=K-`.
 - **Validazione rigorosa della risposta**:
   - Se il server risponde con **HTTP 206 Partial Content**: il flusso viene appeso al file parziale (`open(path, 'ab')`).
   - Se il server ignora il range o risponde con **HTTP 200 OK**: il downloader **non appende** (corromperebbe il file), ma cancella il file parziale e ricomincia da zero (`open(path, 'wb')`).
@@ -134,23 +136,23 @@ Dato il peso considerevole di `model.safetensors` (1,23 GB), le interruzioni tem
 
 Per computer operanti in totale isolamento di rete:
 1. L'amministratore copia i 5 file nella cartella di destinazione:
-   `data/models/rizzo-pii-0.3B/`
+   `models/rizzo-pii-0.3B/` accanto al programma
    (oppure nel percorso configurato tramite la variabile d'ambiente **`PRIVATEDOC_NER_DIR`**).
 2. All'avvio dell'applicazione o su richiesta, il sistema valida le impronte SHA-256 e attiva il modello all'istante, **senza alcun tentativo di connessione verso la rete**.
 
 ---
 
-## 7. Mappatura Puntuale per l'Integrazione (per Claude)
+## 7. Mappatura dell'Integrazione Realizzata
 
 > [!NOTE]
-> Modifiche demandate a Claude nella Fase 2 (nessun file toccato da Gemini in questa fase).
+> La mappatura originaria è stata realizzata nella Fase 2; resta qui come indice dei componenti.
 
 1. **Nuovo modulo `backend/model_downloader.py`**:
-   - Contiene `MODEL_MANIFEST`, logica di streaming HTTP nativo con ripresa Range, verifica SHA-256 progressiva e gestione proxy/SSL.
-   - Espone `start_download()`, `cancel_download()`, `get_download_status()`.
+   - Contiene repository, revisione, licenza, dimensioni e logica di streaming HTTP nativo con ripresa Range, verifica SHA-256 e gestione proxy/SSL.
+   - Espone `info()`, `status()`, `start()`, `cancel()` e `wait()`.
 2. **Integrazione in `backend/document_service.py`**:
-   - `DocumentService` è il modulo che istanzia e detiene il riferimento al detector NER (`self.detector`).
-   - Fornire un metodo `reload_detector()` in `DocumentService` che reinizializza il detector dopo il completamento del download, senza dover riavviare il server.
+   - `DocumentService` istanzia e detiene il detector NER (`self.ner`) e il downloader (`self.model_downloader`).
+   - `reload_detector()` reinizializza il detector dopo il completamento del download, senza riavviare il server.
 3. **Integrazione in `app.py` (nella radice del progetto)**:
    - Endpoint REST:
      - `GET /api/model/status`: stato (`installed`, `active`, `downloading`, `progress`).

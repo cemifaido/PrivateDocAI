@@ -1,6 +1,6 @@
 # Analisi anti-rollback del vault
 
-**Stato:** threat model e opzioni progettuali; nessuna modifica al prodotto.
+**Stato:** analisi conclusa; per decisione del 22 ottobre 2026 l'anti-rollback non viene adottato ora e il documento resta come riferimento. La copertura parziale di un'ancora locale non giustifica oggi il costo operativo e il rischio di lockout; la decisione va rivalutata con più utenti o un rischio concreto.
 
 **Ambito:** vault locale Windows di PrivateDoc AI (`vault.json` e `pratiche/*.enc`).
 
