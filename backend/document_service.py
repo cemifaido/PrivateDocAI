@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 import docx
+import fitz
 
 from .extractor import DocumentExtractor
 from .runtime import APP_DIR
@@ -74,6 +75,9 @@ class DocumentService:
                 self.vault.save_library("categorie", {"custom": custom})
         return ident
 
+    MAX_PDF_PAGES = 500
+    MAX_PDF_TERMS = 5000
+
     def export_redacted_pdf(self, session_id: str, data: bytes, mode: str):
         """
         Removes from ONE PDF (received just now, never stored) every datum protected in the case.
@@ -89,6 +93,15 @@ class DocumentService:
         terms = sorted(labels, key=len, reverse=True)
         if not terms:
             raise PdfRedactionError("Nella pratica non c'è nessun dato protetto da censurare.")
+        if len(terms) > self.MAX_PDF_TERMS:
+            raise PdfRedactionError(f"Troppi dati protetti da censurare in un colpo solo (oltre {self.MAX_PDF_TERMS}).")
+        try:
+            with fitz.open(stream=data, filetype="pdf") as probe:
+                pages = probe.page_count
+        except Exception:
+            raise PdfRedactionError("Il file non è un PDF leggibile.")
+        if pages > self.MAX_PDF_PAGES:
+            raise PdfRedactionError(f"Il PDF ha troppe pagine ({pages}): il limite è {self.MAX_PDF_PAGES}.")
         return redact_pdf(data, terms, mode=mode, labels=labels)
 
     def reload_detector(self) -> None:

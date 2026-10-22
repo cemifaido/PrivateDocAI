@@ -96,6 +96,57 @@ class TestPdfExport(unittest.TestCase):
         empty = self.client.post("/api/upload", files=[("files", ("v.txt", b"Niente di riservato qui.", "text/plain"))]).json()
         self.assertEqual(self.export(make_pdf(), sid=empty["session_id"]).status_code, 422)
 
+    def test_the_response_is_not_cacheable_and_not_sniffable(self):
+        r = self.export(make_pdf())
+        self.assertEqual(r.headers["cache-control"], "no-store, private")
+        self.assertEqual(r.headers["x-content-type-options"], "nosniff")
+
+    def test_hostile_file_names_never_reach_the_headers(self):
+        r = self.client.post("/api/export/pdf", data={"session_id": self.sid, "mode": "nero"},
+                             files={"file": ("../../x\r\nSet-Cookie: a=b.pdf", make_pdf(), "application/pdf")})
+        self.assertEqual(r.status_code, 200)
+        disposition = r.headers["content-disposition"]
+        self.assertNotIn("..", disposition)
+        self.assertNotIn("Set-Cookie", r.headers)
+        self.assertRegex(disposition, r'^attachment; filename="[A-Za-z0-9._-]+_censurato\.pdf"$')
+
+    def test_oversized_uploads_and_pdfs_with_too_many_pages_are_refused(self):
+        import app as app_module
+        saved = app_module.MAX_UPLOAD_FILE_BYTES
+        app_module.MAX_UPLOAD_FILE_BYTES = 500
+        try:
+            self.assertEqual(self.export(make_pdf()).status_code, 413)
+        finally:
+            app_module.MAX_UPLOAD_FILE_BYTES = saved
+        self.service.MAX_PDF_PAGES = 1
+        try:
+            doc = fitz.open()
+            doc.new_page().insert_text((50, 80), TEXT.splitlines()[0])
+            doc.new_page().insert_text((50, 80), "Valerio De Santis")
+            two_pages = doc.tobytes()
+            r = self.export(two_pages)
+            self.assertEqual(r.status_code, 422)
+            self.assertIn("pagine", r.json()["detail"])
+        finally:
+            del self.service.MAX_PDF_PAGES
+
+    def test_too_many_terms_are_refused_and_errors_do_not_echo_the_data(self):
+        self.service.MAX_PDF_TERMS = 1
+        try:
+            r = self.export(make_pdf())
+            self.assertEqual(r.status_code, 422)
+            self.assertNotIn("De Santis", r.text)
+        finally:
+            del self.service.MAX_PDF_TERMS
+
+    def test_a_request_without_the_token_is_rejected(self):
+        from fastapi.testclient import TestClient
+        import app as app_module
+        bare = TestClient(app_module.app, base_url="http://127.0.0.1:8765")
+        r = bare.post("/api/export/pdf", data={"session_id": self.sid},
+                      files={"file": ("a.pdf", make_pdf(), "application/pdf")})
+        self.assertEqual(r.status_code, 403)
+
 
 if __name__ == "__main__":
     unittest.main()

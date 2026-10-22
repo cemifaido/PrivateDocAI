@@ -510,6 +510,8 @@ async def export_pdf(session_id: str = Form(...), mode: str = Form("nero"), file
     return Response(content=pdf, media_type="application/pdf", headers={
         "Content-Disposition": f'attachment; filename="{stem}_censurato.pdf"',
         "X-PrivateDoc-Removed": str(removed),
+        "Cache-Control": "no-store, private",
+        "X-Content-Type-Options": "nosniff",
     })
 
 @app.get("/api/export/docx")
