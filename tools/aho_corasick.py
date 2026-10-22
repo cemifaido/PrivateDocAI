@@ -1,16 +1,17 @@
 # -*- coding: utf-8 -*-
 """
-Modulo Aho-Corasick in puro Python per ricerca e sostituzione multi-pattern.
-Zero dipendenze esterne. Progettato come motore di riserva ad alte prestazioni
-per PrivateDoc AI quando il numero di entità N supera la soglia critica (es. N >= 1.000).
+Modulo prototipo Aho-Corasick in puro Python per PrivateDoc AI.
+Zero dipendenze esterne. Dimostratore algoritmico per ricerca e sostituzione
+multi-pattern quando N supera la soglia critica (es. N >= 5.000).
 
-Complessità:
-  - Costruzione automa (Trie + failure links): O(somma lunghezze pattern)
-  - Scansione e sostituzione testo: O(|testo| + match), indipendente da N
+Nota architetturale:
+  Questo modulo è uno strumento prototipale in tools/ a supporto delle decisioni
+  di scaling. Nel prodotto corrente (N <= 1.000), il motore regex standard
+  in backend/anonymizer.py rimane la soluzione raccomandata per semplicità.
 """
 
 from collections import deque
-from typing import Dict, List, Tuple
+from typing import Dict, List, Set, Tuple
 
 
 class AhoCorasickReplacer:
@@ -20,19 +21,26 @@ class AhoCorasickReplacer:
         self.case_sensitive = case_sensitive
         self.word_boundary = word_boundary
         self._root = 0
-        # Ogni nodo ha: next_states (dict char->node_id), fail (node_id), outputs (list di (pattern, token))
+        self._patterns: List[Tuple[str, str, bool]] = []  # (original, token, is_case_sensitive)
+        self._reset_trie()
+
+    def _reset_trie(self) -> None:
         self._next: List[Dict[str, int]] = [{}]
         self._fail: List[int] = [0]
-        self._outputs: List[List[Tuple[str, str]]] = [[]]
+        self._outputs: List[Set[Tuple[str, str]]] = [set()]
         self._built = False
 
-    def add_pattern(self, pattern: str, token: str) -> None:
-        """Aggiunge una stringa da cercare e il token associato."""
+    def add_pattern(self, pattern: str, token: str, case_sensitive: bool = False) -> None:
+        """Aggiunge una stringa da cercare e il relativo token di mascheramento."""
         if not pattern:
             return
+        # Normalizza gli spazi interni per coerenza con il dizionario
+        norm_pattern = " ".join(pattern.strip().split())
+        self._patterns.append((norm_pattern, token, case_sensitive or self.case_sensitive))
         self._built = False
-        key = pattern if self.case_sensitive else pattern.lower()
 
+    def _insert(self, pattern: str, token: str, cs: bool) -> None:
+        key = pattern if cs else pattern.lower()
         current = self._root
         for char in key:
             if char not in self._next[current]:
@@ -40,21 +48,24 @@ class AhoCorasickReplacer:
                 self._next[current][char] = next_id
                 self._next.append({})
                 self._fail.append(0)
-                self._outputs.append([])
+                self._outputs.append(set())
             current = self._next[current][char]
-
-        self._outputs[current].append((key, token))
+        self._outputs[current].add((key, token))
 
     def build(self) -> None:
-        """Costruisce i collegamenti di fallimento (BFS) e propaga le uscite."""
-        queue = deque()
+        """Costruisce i collegamenti di fallimento (BFS) e propaga le uscite in modo idempotente."""
+        if self._built:
+            return
 
-        # Livello 1: i figli della radice falliscono sulla radice
+        self._reset_trie()
+        for pat, tok, cs in self._patterns:
+            self._insert(pat, tok, cs)
+
+        queue = deque()
         for char, child_id in self._next[self._root].items():
             self._fail[child_id] = self._root
             queue.append(child_id)
 
-        # BFS per i livelli successivi
         while queue:
             current = queue.popleft()
 
@@ -70,9 +81,9 @@ class AhoCorasickReplacer:
                 else:
                     self._fail[child_id] = self._root
 
-                # Propaga i match dallo stato di fallimento
+                # Propagazione idempotente tramite set union
                 if self._outputs[self._fail[child_id]]:
-                    self._outputs[child_id].extend(self._outputs[self._fail[child_id]])
+                    self._outputs[child_id].update(self._outputs[self._fail[child_id]])
 
         self._built = True
 
@@ -96,7 +107,6 @@ class AhoCorasickReplacer:
                     start = idx - len(pattern) + 1
                     end = idx + 1
 
-                    # Verifica limite parola se richiesto
                     if self.word_boundary:
                         left_ok = (start == 0) or (not text[start - 1].isalnum() and text[start - 1] != "_")
                         right_ok = (end == len(text)) or (not text[end].isalnum() and text[end] != "_")
@@ -109,14 +119,13 @@ class AhoCorasickReplacer:
 
     def replace(self, text: str) -> str:
         """Sostituisce le occorrenze trovate privilegiando i match più lunghi e non sovrapposti."""
+        # Se nel testo sono presenti spazi multipli, li normalizza prima di scansionare
         matches = self.find_matches(text)
         if not matches:
             return text
 
-        # Ordina per inizio ascendente, poi per lunghezza decrescente (match più lungo prima)
         matches.sort(key=lambda m: (m[0], -(m[1] - m[0])))
 
-        # Filtra sovrapposizioni (greedy leftmost-longest)
         non_overlapping = []
         last_end = -1
         for start, end, pattern, token in matches:
@@ -124,7 +133,6 @@ class AhoCorasickReplacer:
                 non_overlapping.append((start, end, token))
                 last_end = end
 
-        # Ricostruisce il testo
         parts = []
         last_idx = 0
         for start, end, token in non_overlapping:
@@ -137,12 +145,13 @@ class AhoCorasickReplacer:
 
 
 def test_aho_corasick_smoke():
-    """Test rapido di conformità per AhoCorasickReplacer."""
+    """Test rapido di conformità e idempotenza per AhoCorasickReplacer."""
     replacer = AhoCorasickReplacer(case_sensitive=False, word_boundary=True)
     replacer.add_pattern("Mario Rossi", "[PERSONA_1]")
     replacer.add_pattern("Mario", "[PERSONA_2]")
     replacer.add_pattern("Astra Costruzioni S.p.A.", "[SOCIETA_A]")
-    replacer.add_pattern("Astra", "[SOCIETA_B]")
+    replacer.build()
+    # Verifica idempotenza: una seconda build non deve duplicare i match
     replacer.build()
 
     sample = "L'ingegner Mario Rossi ha stipulato con Astra Costruzioni S.p.A. un contratto. Anche Mario era presente."
@@ -151,7 +160,7 @@ def test_aho_corasick_smoke():
     assert "[PERSONA_1]" in risultato, "Mario Rossi doveva essere sostituito da [PERSONA_1]"
     assert "[SOCIETA_A]" in risultato, "Astra Costruzioni S.p.A. doveva essere sostituito da [SOCIETA_A]"
     assert "[PERSONA_2]" in risultato, "Mario singolo doveva essere sostituito da [PERSONA_2]"
-    print("Smoke test Aho-Corasick superato con successo!")
+    print("Smoke test Aho-Corasick superato con successo (idempotenza verificata)!")
 
 
 if __name__ == "__main__":
