@@ -1,0 +1,184 @@
+{
+  "contratto_appalto.txt": [
+    {
+      "text": "Astra Costruzioni S.p.A.",
+      "category": "SOCIETA"
+    },
+    {
+      "text": "Astra",
+      "category": "SOCIETA"
+    },
+    {
+      "text": "Roberto De Luca",
+      "category": "PERSONA"
+    },
+    {
+      "text": "Elena Rinaldi",
+      "category": "PERSONA"
+    },
+    {
+      "text": "Studio Tecnico Rinaldi & Associati S.r.l.",
+      "category": "SOCIETA"
+    },
+    {
+      "text": "Rinaldi",
+      "category": "SOCIETA"
+    },
+    {
+      "text": "BHVNQX75M12H501V",
+      "category": "CODICE_FISCALE"
+    },
+    {
+      "text": "12345678903",
+      "category": "PARTITA_IVA"
+    },
+    {
+      "text": "Via Manzoni 18",
+      "category": "INDIRIZZO"
+    },
+    {
+      "text": "Foglio 14, particella 280, sub. 3",
+      "category": "CATASTO"
+    },
+    {
+      "text": "euro 125.000,00",
+      "category": "IMPORTO"
+    },
+    {
+      "text": "IT60X0542811101000000123456",
+      "category": "IBAN"
+    },
+    {
+      "text": "PROT-2026/88",
+      "category": "RIFERIMENTO"
+    },
+    {
+      "text": "info@astracostruzioni.example",
+      "category": "EMAIL"
+    },
+    {
+      "text": "elena.rinaldi@studiorinaldi.example",
+      "category": "EMAIL"
+    },
+    {
+      "text": "02 87654321",
+      "category": "TELEFONO"
+    },
+    {
+      "text": "24 maggio 2026",
+      "category": "DATA"
+    },
+    {
+      "text": "15 settembre 2026",
+      "category": "DATA"
+    },
+    {
+      "text": "12/08/1975",
+      "category": "DATA"
+    }
+  ],
+  "atto_citazione.txt": [
+    {
+      "text": "1420/2026",
+      "category": "RIFERIMENTO"
+    },
+    {
+      "text": "Marco Valli",
+      "category": "PERSONA"
+    },
+    {
+      "text": "Federico Manzoni",
+      "category": "PERSONA"
+    },
+    {
+      "text": "Valeria Moretti",
+      "category": "PERSONA"
+    },
+    {
+      "text": "PWLKTZ82A10F205V",
+      "category": "CODICE_FISCALE"
+    },
+    {
+      "text": "valeria.moretti@ordineavvocati.example",
+      "category": "EMAIL"
+    },
+    {
+      "text": "02 76543210",
+      "category": "TELEFONO"
+    },
+    {
+      "text": "Alpha Motors S.r.l.",
+      "category": "SOCIETA"
+    },
+    {
+      "text": "09876543217",
+      "category": "PARTITA_IVA"
+    },
+    {
+      "text": "AB987CD",
+      "category": "TARGA"
+    },
+    {
+      "text": "AY8765432",
+      "category": "DOC_IDENTITA"
+    },
+    {
+      "text": "POL-554433",
+      "category": "RIFERIMENTO"
+    },
+    {
+      "text": "euro 14.800,00",
+      "category": "IMPORTO"
+    },
+    {
+      "text": "14 febbraio 2026",
+      "category": "DATA"
+    },
+    {
+      "text": "10/01/1982",
+      "category": "DATA"
+    }
+  ],
+  "service_agreement_en.txt": [
+    {
+      "text": "Omnia Tech Solutions Ltd",
+      "category": "SOCIETA"
+    },
+    {
+      "text": "Johnathan Vance",
+      "category": "PERSONA"
+    },
+    {
+      "text": "Apex Consulting Partners LLP",
+      "category": "SOCIETA"
+    },
+    {
+      "text": "Apex",
+      "category": "SOCIETA"
+    },
+    {
+      "text": "Sarah Jenkins",
+      "category": "PERSONA"
+    },
+    {
+      "text": "j.vance@omniatech.example",
+      "category": "EMAIL"
+    },
+    {
+      "text": "REF-2026-99",
+      "category": "RIFERIMENTO"
+    },
+    {
+      "text": "USD 85,000.00",
+      "category": "IMPORTO"
+    },
+    {
+      "text": "GB29NWBK60161331926819",
+      "category": "IBAN"
+    },
+    {
+      "text": "18 June 2026",
+      "category": "DATA"
+    }
+  ]
+}
