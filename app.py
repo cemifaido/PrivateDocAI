@@ -408,6 +408,23 @@ def check_auth_status(provider: str):
     res = doc_service.browser_bridge.check_login_status(provider)
     return res
 
+class GeminiApiSettings(BaseModel):
+    key: Optional[str] = None
+    model: Optional[str] = None
+    enabled: Optional[bool] = None
+    acknowledged: Optional[bool] = None
+
+@app.get("/api/gemini-api")
+def gemini_api_status():
+    return doc_service.gemini_api_public()
+
+@app.post("/api/gemini-api")
+def gemini_api_settings(data: GeminiApiSettings):
+    try:
+        return doc_service.set_gemini_api(data.key, data.model, data.enabled, data.acknowledged)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
 class ExecuteRequest(BaseModel):
     session_id: str
     provider: str
@@ -449,7 +466,10 @@ def execute_task(data: ExecuteRequest):
     prompt = prepared["prompt"]
 
     # Run through browser bridge
-    bridge_result = doc_service.browser_bridge.execute_prompt(data.provider, prompt)
+    if data.provider == "gemini_api":
+        bridge_result = doc_service.run_gemini_api(prompt)
+    else:
+        bridge_result = doc_service.browser_bridge.execute_prompt(data.provider, prompt)
     if bridge_result.get("status") != "success":
         return {
             "status": "error",

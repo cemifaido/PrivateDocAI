@@ -14,6 +14,7 @@ from .browser_bridge import BrowserBridge
 from .vault import Vault
 from .ner import NerDetector
 from .model_downloader import ModelDownloader
+from . import gemini_api
 from .pdf_redaction import PdfRedactionError, redact_pdf
 
 # Type aliases for clean code
@@ -74,6 +75,50 @@ class DocumentService:
                 custom[ident] = " ".join(name.split())[:40]
                 self.vault.save_library("categorie", {"custom": custom})
         return ident
+
+    # ----- optional Gemini API (off by default): the key lives only in the encrypted vault -----
+    def gemini_api_public(self) -> Dict[str, Any]:
+        """What the interface may know: never the key itself."""
+        saved = self.vault.load_library("chiavi").get("gemini", {}) if self.vault else {}
+        return {"configured": bool(saved.get("key")), "model": saved.get("model", ""),
+                "enabled": bool(saved.get("enabled") and saved.get("key")),
+                "acknowledged": bool(saved.get("acknowledged"))}
+
+    def set_gemini_api(self, key=None, model=None, enabled=None, acknowledged=None) -> Dict[str, Any]:
+        with self._state_lock:
+            library = self.vault.load_library("chiavi")
+            saved = dict(library.get("gemini", {}))
+            if key is not None:
+                key = key.strip()
+                if key and not gemini_api.KEY_PATTERN.match(key):
+                    raise ValueError("La chiave non ha il formato atteso.")
+                saved["key"] = key
+                if not key:
+                    saved["enabled"] = False
+            if model is not None:
+                if model and not gemini_api.MODEL_PATTERN.match(model.strip()):
+                    raise ValueError("Il nome del modello non è valido.")
+                saved["model"] = model.strip()
+            if acknowledged is not None:
+                saved["acknowledged"] = bool(acknowledged)
+            if enabled is not None:
+                if enabled and not (saved.get("key") and saved.get("model") and saved.get("acknowledged")):
+                    raise ValueError("Per attivarla servono chiave, nome del modello e la presa visione dell'avviso.")
+                saved["enabled"] = bool(enabled)
+            library["gemini"] = saved
+            self.vault.save_library("chiavi", library)
+        return self.gemini_api_public()
+
+    def run_gemini_api(self, prompt: str, opener=None) -> Dict[str, Any]:
+        saved = self.vault.load_library("chiavi").get("gemini", {})
+        if not (saved.get("enabled") and saved.get("key")):
+            return {"status": "error", "message": "L'API di Gemini non è attiva."}
+        try:
+            text = gemini_api.generate(saved["key"], saved.get("model", ""), prompt,
+                                       **({"opener": opener} if opener else {}))
+        except gemini_api.GeminiApiError as exc:
+            return {"status": "error", "message": str(exc)}
+        return {"status": "success", "response": text}
 
     MAX_PDF_PAGES = 500
     MAX_PDF_TERMS = 5000

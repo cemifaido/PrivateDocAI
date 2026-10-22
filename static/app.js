@@ -239,10 +239,11 @@ function setupEventListeners() {
         alert("Prompt anonimizzato copiato negli appunti!");
     });
 
-    copyMaskedPromptBtn.addEventListener('click', async () => {
+    // Copies the anonymised text (after the same pre-flight check as every other way out); true if copied
+    async function copyMaskedPrompt() {
         if (!state.sessionId) {
             alert("Carica prima almeno un file!");
-            return;
+            return false;
         }
         const resp = await fetch('/api/prompt/generate', {
             method: 'POST',
@@ -255,13 +256,30 @@ function setupEventListeners() {
         const data = await resp.json();
         if (!resp.ok) {
             alert(data.detail || "Impossibile generare il testo.");
-            return;
+            return false;
         }
         renderPreflight(data.preflight);
-        if (!allowedToLeave(data.preflight)) return;
-        navigator.clipboard.writeText(data.prompt);
-        alert("Prompt anonimizzato copiato! Incollalo ora nella chat del provider.");
+        if (!allowedToLeave(data.preflight)) return false;
+        await navigator.clipboard.writeText(data.prompt);
+        return true;
+    }
+
+    copyMaskedPromptBtn.addEventListener('click', async () => {
+        if (await copyMaskedPrompt()) alert("Prompt anonimizzato copiato! Incollalo ora nella chat del provider.");
     });
+
+    // One click: copy the anonymised text, open the provider in the user's normal browser, wait for the answer
+    async function copyAndOpenProvider() {
+        const provider = MANUAL_PROVIDERS.includes(state.activeProvider) ? state.activeProvider : 'gemini';
+        if (!(await copyMaskedPrompt())) return;
+        window.open(PROVIDER_URLS[provider], '_blank', 'noopener');
+        const hint = document.getElementById('copyHint');
+        hint.textContent = `✓ Testo copiato. Incollalo (Ctrl+V) nella chat di ${getProviderDisplayName(provider)}, poi copia la risposta e incollala qui sotto.`;
+        hint.style.display = 'block';
+        manualResponseInput.scrollIntoView({behavior: 'smooth', block: 'center'});
+        manualResponseInput.focus();
+    }
+    document.getElementById('copyOpenBtn').addEventListener('click', copyAndOpenProvider);
 
     // Manual Deanonymize
     manualDeanonymizeBtn.addEventListener('click', async () => {
@@ -294,6 +312,10 @@ function setupEventListeners() {
     runAnalysisBtn.addEventListener('click', async () => {
         if (!state.sessionId || state.documents.length === 0) {
             alert("Carica prima almeno un file da confrontare!");
+            return;
+        }
+        if (MANUAL_PROVIDERS.includes(state.activeProvider)) {   // no automatic browser for these: copy and open
+            await copyAndOpenProvider();
             return;
         }
         showLoading(
@@ -772,6 +794,7 @@ async function afterUnlock() {
     document.getElementById('vaultModal').style.display = 'none';
     loadNerStatus();
     pollModelDownload();   // shows the progress again if a download is running
+    loadGeminiApi();
     await loadCases();
     await restoreSession();
 }
@@ -1137,6 +1160,52 @@ document.getElementById('exportPdfInput').addEventListener('change', async (e) =
     }
 });
 
+// ---------- Optional official Gemini API (off by default; the key is kept encrypted by the server) ----------
+async function loadGeminiApi() {
+    try {
+        const st = await (await fetch('/api/gemini-api')).json();
+        document.getElementById('provGeminiApi').style.display = st.enabled ? '' : 'none';
+        if (!st.enabled && state.activeProvider === 'gemini_api') {
+            document.querySelector('.prov-pill[data-provider="gemini"]').click();
+        }
+        document.getElementById('geminiApiModel').value = st.model || '';
+        document.getElementById('geminiApiAck').checked = !!st.acknowledged;
+        document.getElementById('geminiApiEnabled').checked = !!st.enabled;
+        document.getElementById('geminiApiState').textContent = st.configured
+            ? '✓ Una chiave è salvata (non viene mostrata).' : 'Nessuna chiave salvata.';
+        return st;
+    } catch { return null; }
+}
+async function postGeminiApi(body) {
+    const resp = await fetch('/api/gemini-api', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+    if (!resp.ok) { alert((await resp.json()).detail || 'Impostazione non salvata.'); return false; }
+    return true;
+}
+document.getElementById('geminiApiOpenBtn').addEventListener('click', async () => {
+    await loadGeminiApi();
+    document.getElementById('geminiApiModal').style.display = 'flex';
+});
+document.getElementById('geminiApiClose').addEventListener('click', () => {
+    document.getElementById('geminiApiKey').value = '';
+    document.getElementById('geminiApiModal').style.display = 'none';
+});
+document.getElementById('geminiApiSave').addEventListener('click', async () => {
+    const keyInput = document.getElementById('geminiApiKey');
+    const body = {model: document.getElementById('geminiApiModel').value.trim(),
+                  acknowledged: document.getElementById('geminiApiAck').checked};
+    if (keyInput.value.trim()) body.key = keyInput.value.trim();
+    if (!(await postGeminiApi(body))) return;
+    keyInput.value = '';
+    if (!(await postGeminiApi({enabled: document.getElementById('geminiApiEnabled').checked}))) {
+        document.getElementById('geminiApiEnabled').checked = false;
+    }
+    await loadGeminiApi();
+});
+document.getElementById('geminiApiRemove').addEventListener('click', async () => {
+    if (!confirm("Cancellare la chiave salvata e disattivare l'API di Gemini?")) return;
+    if (await postGeminiApi({key: ''})) await loadGeminiApi();
+});
+
 function renderRestoreNotice(report) {
     const box = document.getElementById('restoreNotice');
     if (!box) return;
@@ -1193,14 +1262,19 @@ function goToStep(stepNum) {
     document.getElementById('pageSubtitle').textContent = titleMap[stepNum].sub;
 }
 
+// Google, OpenAI and Anthropic refuse automated browsers (and the program does not try to hide automation):
+// for these the answer is copied and pasted by hand, in the user's own browser
+const MANUAL_PROVIDERS = ['gemini', 'chatgpt', 'claude'];
+const PROVIDER_URLS = {gemini: 'https://gemini.google.com', chatgpt: 'https://chatgpt.com', claude: 'https://claude.ai'};
+
 function updateProviderUI(prov) {
     state.activeProvider = prov;
-    // Claude cannot be driven by the automatic browser: the button opens it normally instead
-    const manualOnly = ['claude', 'chatgpt'].includes(prov);
-    openLoginBtn.lastChild.textContent = manualOnly
-        ? ` Apri ${prov === 'claude' ? 'Claude' : 'ChatGPT'} nel browser`
-        : " Accedi all'Account";
+    const manualOnly = MANUAL_PROVIDERS.includes(prov);
     const name = getProviderDisplayName(prov);
+    openLoginBtn.style.display = prov === 'gemini_api' ? 'none' : '';
+    openLoginBtn.lastChild.textContent = ` Apri ${name.split(' (')[0]} nel browser`;
+    runAnalysisBtn.lastChild.textContent = manualOnly ? ` Copia e apri ${name.split(' (')[0]}` : " Avvia Elaborazione Protetta";
+    document.getElementById('copyOpenName').textContent = manualOnly ? name.split(' (')[0] : 'Gemini';
     activeProviderLabel.textContent = `${name} Bridge`;
     execProviderName.textContent = name;
     checkAuth();
@@ -1210,10 +1284,16 @@ function getProviderDisplayName(prov) {
     if (prov === 'gemini') return 'Google Gemini';
     if (prov === 'chatgpt') return 'ChatGPT (OpenAI)';
     if (prov === 'claude') return 'Claude (Anthropic)';
+    if (prov === 'gemini_api') return 'Gemini (API ufficiale)';
     return prov;
 }
 
 async function checkAuth() {
+    if (state.activeProvider === 'gemini_api') {
+        authStatusText.textContent = "✓ API ufficiale di Gemini attiva (chiave salvata nell'archivio cifrato)";
+        authStatusText.style.color = "var(--accent-emerald)";
+        return;
+    }
     authStatusText.textContent = "Verifica connessione in corso...";
     authStatusText.style.color = "var(--text-secondary)";
     const provider = state.activeProvider;

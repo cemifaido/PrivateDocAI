@@ -112,6 +112,7 @@
                         <button class="prov-pill active" data-provider="gemini">Google Gemini</button>
                         <button class="prov-pill" data-provider="chatgpt">ChatGPT</button>
                         <button class="prov-pill" data-provider="claude">Claude</button>
+                        <button class="prov-pill" data-provider="gemini_api" id="provGeminiApi" style="display:none;">Gemini (API)</button>
                     </div>
                 </div>
             </header>
@@ -250,13 +251,18 @@
                             <h4>📋 Modalità Copia & Decifra (Zero Installazioni)</h4>
                             <span class="badge-tag">Opzione 100% Sempre Disponibile</span>
                         </div>
-                        <p>Preferisci incollare direttamente nella tua finestra aperta di Gemini o ChatGPT?</p>
-                        <button id="copyMaskedPromptBtn" class="btn-outline btn-sm">
-                            1. Copia Testo Anonimizzato
+                        <p>Il testo anonimo si incolla nella tua finestra di Gemini, ChatGPT o Claude (già connessa con il tuo account).</p>
+                        <button id="copyOpenBtn" class="btn-primary btn-sm">
+                            1. Copia e apri <span id="copyOpenName">Gemini</span>
                         </button>
+                        <button id="copyMaskedPromptBtn" class="btn-outline btn-sm">
+                            Solo copia il testo anonimizzato
+                        </button>
+                        <p style="margin:10px 0 0;"><button type="button" class="btn-text" id="geminiApiOpenBtn" style="font-size:0.75rem;">Avanzate: usa l'API ufficiale di Gemini con la tua chiave…</button></p>
+                        <p id="copyHint" style="display:none; font-size:0.85rem; color:var(--accent-emerald); margin:8px 0 0;"></p>
                         <div class="paste-zone">
                             <label>2. Incolla qui la risposta che ti ha dato l'LLM:</label>
-                            <textarea id="manualResponseInput" rows="3" placeholder="Incolla qui la risposta dell'LLM contenente [PERSONA_1], [SOCIETA_A]..."></textarea>
+                            <textarea id="manualResponseInput" rows="12" placeholder="Incolla qui la risposta dell'LLM contenente [PERSONA_1], [SOCIETA_A]..."></textarea>
                             <button id="manualDeanonymizeBtn" class="btn-secondary btn-sm">
                                 3. Decifra Istantaneamente
                             </button>
@@ -393,6 +399,38 @@
             <div class="modal-footer">
                 <button class="btn-secondary" id="modelModalNo">Annulla</button>
                 <button class="btn-primary" id="modelModalYes">Scarica e installa</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="geminiApiModal" style="display:none; z-index:1900;">
+        <div class="modal-dialog" style="max-width:600px;">
+            <div class="modal-header">
+                <h3>API ufficiale di Gemini (facoltativa)</h3>
+                <button class="close-btn" id="geminiApiClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc">Spenta per impostazione predefinita. Invia il testo già anonimizzato all'API di Google con <strong>la tua chiave</strong>
+                    (che resta cifrata nell'archivio, mai in un file in chiaro).</p>
+                <div class="preflight-box warn" style="margin:0 0 12px; font-size:0.82rem;">
+                    <strong>Prima di attivarla, leggi come Google tratta i dati</strong> (termini dell'API consultati il 22/10/2026, aggiornati al 28/04/2026):
+                    con la quota <em>gratuita</em> Google può usare i contenuti per migliorare i suoi prodotti e revisori umani possono leggerli, e sconsiglia di inviare dati riservati;
+                    con la quota <em>a pagamento</em> non li usa per migliorare i prodotti. Per chi è nello Spazio economico europeo, in Svizzera o nel Regno Unito
+                    si applicano le condizioni del servizio a pagamento anche con quota gratuita. Verifica sempre i termini vigenti.
+                </div>
+                <div class="form-group"><label>Chiave API (non viene mai mostrata di nuovo):</label>
+                    <input type="password" id="geminiApiKey" autocomplete="off" spellcheck="false" placeholder="Incolla la chiave per salvarla o sostituirla"></div>
+                <div class="form-group"><label>Nome del modello (come indicato da Google):</label>
+                    <input type="text" id="geminiApiModel" autocomplete="off" spellcheck="false" placeholder="es. gemini-… (dall'elenco dei modelli di Google)"></div>
+                <label style="display:block; font-size:0.85rem; margin:8px 0;"><input type="checkbox" id="geminiApiAck">
+                    Ho letto l'avviso: capisco che i dati inviati seguono le condizioni della mia quota.</label>
+                <label style="display:block; font-size:0.85rem; margin:8px 0;"><input type="checkbox" id="geminiApiEnabled">
+                    Attiva l'API di Gemini come quarta opzione in alto.</label>
+                <p id="geminiApiState" style="font-size:0.8rem; color:var(--text-secondary);"></p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="geminiApiRemove">Cancella la chiave</button>
+                <button class="btn-primary" id="geminiApiSave">Salva</button>
             </div>
         </div>
     </div>

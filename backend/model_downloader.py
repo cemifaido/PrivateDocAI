@@ -58,8 +58,8 @@ class _HttpsOnlyRedirects(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-def default_opener(url: str, headers: Dict[str, str]):
-    """Opens ``url`` (HTTPS only) with the system proxy and an optional company CA bundle."""
+def default_opener(url: str, headers: Dict[str, str], data: Optional[bytes] = None):
+    """Opens ``url`` (HTTPS only; POST when ``data`` is given) with the system proxy and an optional company CA bundle."""
     if not url.lower().startswith("https://"):
         raise DownloadError("sono ammessi solo indirizzi HTTPS")
     cafile = next((os.environ[v] for v in ("SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE")
@@ -67,7 +67,7 @@ def default_opener(url: str, headers: Dict[str, str]):
     context = ssl.create_default_context(cafile=cafile)
     opener = urllib.request.build_opener(urllib.request.ProxyHandler(), _HttpsOnlyRedirects(),
                                          urllib.request.HTTPSHandler(context=context))
-    request = urllib.request.Request(url, headers={**headers, "User-Agent": "PrivateDocAI-model-download"})
+    request = urllib.request.Request(url, data=data, headers={**headers, "User-Agent": "PrivateDocAI"})
     return opener.open(request, timeout=30)
 
 

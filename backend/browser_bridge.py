@@ -47,7 +47,7 @@ class BrowserBridge:
 
     # Providers whose anti-bot check (Cloudflare, Google sign-in) rejects any
     # automated browser: they are used only through copy & paste.
-    MANUAL_ONLY = {"claude", "chatgpt"}
+    MANUAL_ONLY = {"gemini", "claude", "chatgpt"}
 
     def __init__(self, base_profile_dir: Optional[str] = None):
         # abspath: a ".." left in the path makes headless Chromium fail to read its profile

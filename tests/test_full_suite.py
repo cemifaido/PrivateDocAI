@@ -566,6 +566,7 @@ class TestLoginWindowReportsFailures(unittest.TestCase):
         from unittest import mock
         from backend import browser_bridge
         bridge = browser_bridge.BrowserBridge(base_profile_dir=tempfile.mkdtemp())
+        bridge.MANUAL_ONLY = set()      # the automatic path (kept for tests and any future provider)
 
         def broken(*args, **kwargs):
             raise RuntimeError("Executable doesn't exist at C:/chrome.exe")
@@ -617,6 +618,7 @@ class TestGoogleRejectsTheAutomatedBrowser(unittest.TestCase):
                 return False
 
         bridge = browser_bridge.BrowserBridge(base_profile_dir=tempfile.mkdtemp())
+        bridge.MANUAL_ONLY = set()      # the automatic path (kept for tests and any future provider)
         with mock.patch.object(browser_bridge, "sync_playwright", lambda: Playwright()),                 mock.patch.object(browser_bridge.webbrowser, "open") as opened:
             bridge.open_login_window("gemini")
             bridge._login_threads["gemini"].join(10)

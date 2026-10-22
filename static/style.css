@@ -1078,6 +1078,13 @@ textarea:focus {
   font-size: 0.9rem;
 }
 
+/* copy and paste windows: large enough to actually read and check the text */
+#promptModal .modal-dialog { max-width: min(1250px, 95vw); width: 95vw; }
+#maskedPromptPreview { min-height: 45vh; max-height: 68vh; font-size: 0.9rem; }
+#manualResponseInput { min-height: 42vh; font-family: var(--font-mono); font-size: 0.9rem; line-height: 1.55; }
+.fallback-card { max-width: none; }
+.result-content { min-height: 40vh; }
+
 .cat-search {
     width: 100%;
     box-sizing: border-box;
