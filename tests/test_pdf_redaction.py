@@ -137,6 +137,26 @@ class PdfRedactionTests(unittest.TestCase):
             cleaned.close()
         self.assertTrue(report["verified"])
 
+    def test_redacts_text_in_a_hidden_optional_content_layer(self):
+        term = "Roberto Gatti"
+        document = fitz.open()
+        page = document.new_page()
+        page.insert_text((72, 72), "testo pubblico")
+        layer = document.add_ocg("Allegato riservato", on=False)
+        page.insert_text((72, 100), f"Garante: {term}", oc=layer)
+
+        output, report = redact_pdf(_save(document), [term])
+
+        cleaned = fitz.open(stream=output, filetype="pdf")
+        try:
+            for item in cleaned.layer_ui_configs() or []:
+                if item.get("type") in {"checkbox", "radiobox"}:
+                    cleaned.set_layer_ui_config(item["number"], action=0)
+            self.assertNotIn(term, cleaned[0].get_text())
+        finally:
+            cleaned.close()
+        self.assertEqual(report["terms"][term], {"removed": 1, "residual": 0})
+
     def test_full_save_discards_an_old_incremental_revision(self):
         term = "Mario Rossi"
         with tempfile.TemporaryDirectory() as folder:

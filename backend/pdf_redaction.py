@@ -145,6 +145,28 @@ def _delete_annotations(document: fitz.Document) -> None:
             page.delete_widget(widget)
 
 
+def _show_hidden_layers(document: fitz.Document) -> list[int]:
+    """Temporarily enable user-switchable OCG layers so their text is searchable."""
+    enabled: list[int] = []
+    for item in document.layer_ui_configs() or []:
+        if item.get("type") in {"checkbox", "radiobox"} and not item.get("on"):
+            try:
+                document.set_layer_ui_config(item["number"], action=0)
+                enabled.append(item["number"])
+            except (RuntimeError, ValueError):
+                # The final stream inspection will reject any sensitive residue.
+                continue
+    return enabled
+
+
+def _restore_hidden_layers(document: fitz.Document, enabled: list[int]) -> None:
+    for number in enabled:
+        try:
+            document.set_layer_ui_config(number, action=2)
+        except (RuntimeError, ValueError):
+            continue
+
+
 def _raw_pdf_text(document: fitz.Document, pdf_bytes: bytes) -> str:
     """Decode objects and streams conservatively for the independent final gate."""
     values = [pdf_bytes.decode("latin-1", errors="ignore"), pdf_bytes.decode("utf-8", errors="ignore")]
@@ -235,6 +257,7 @@ def redact_pdf(
         for term in selected:
             report["terms"][term]["removed"] += _count(auxiliary, term)
 
+        temporarily_enabled_layers = _show_hidden_layers(document)
         for page_number, page in enumerate(document):
             extracted = page.get_text("text")
             if page.get_images(full=True) and not _normalise(extracted):
@@ -267,6 +290,7 @@ def redact_pdf(
                 graphics=fitz.PDF_REDACT_LINE_ART_REMOVE_IF_TOUCHED,
                 text=fitz.PDF_REDACT_TEXT_REMOVE,
             )
+        _restore_hidden_layers(document, temporarily_enabled_layers)
 
         _delete_annotations(document)
         document.set_toc([])
