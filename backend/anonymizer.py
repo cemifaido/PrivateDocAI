@@ -2,6 +2,8 @@ import re
 import uuid
 from typing import Dict, List, Any, Optional, Tuple
 
+from backend.validators import is_valid_iban, is_valid_partita_iva
+
 # How acts introduce a short name for a party: "(d'ora in avanti “X”)", ", di seguito “X”," ...
 _INTRO_WORDS = (
     r"d[’']ora\s+(?:in\s+avanti|innanzi)|qui\s+di\s+seguito|di\s+seguito|in\s+seguito|nel\s+seguito|"
@@ -830,6 +832,14 @@ class DeterministicAnonymizer:
             entities.append({"raw": m.group(0), "category": "IBAN"})
         working_text = re.sub(iban_pattern, ' ' * 27, working_text)
 
+        # IBAN in the printed form (groups of four): too loose to trust by shape alone, so only a
+        # valid checksum accepts it. A failed checksum never REMOVES a mask found by the rules above
+        # (a typo or an OCR error must not make a real identifier readable).
+        for m in re.finditer(r'\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){3,7}(?: ?[A-Z0-9]{1,3})?\b', working_text):
+            if " " in m.group(0) and is_valid_iban(m.group(0)):
+                entities.append({"raw": m.group(0), "category": "IBAN"})
+                working_text = working_text.replace(m.group(0), ' ' * len(m.group(0)))
+
         # Italian Codice Fiscale
         cf_pattern = r'\b[A-Z]{6}[0-9LMNPQRSTUV]{2}[A-EHLMPR-T][0-9LMNPQRSTUV]{2}[A-Z][0-9LMNPQRSTUV]{3}[A-Z]\b'
         for m in re.finditer(cf_pattern, working_text, re.IGNORECASE):
@@ -840,6 +850,11 @@ class DeterministicAnonymizer:
         piva_pattern = r'(?:P\.?\s*IVA|Partita\s+IVA|C\.?F\.?\/P\.?IVA|VAT\s*(?:ID|No|Number)?)\s*[:.]?\s*([A-Z0-9]{8,14})'
         for m in re.finditer(piva_pattern, working_text, re.IGNORECASE):
             entities.append({"raw": m.group(1), "category": "PARTITA_IVA"})
+
+        # Partita IVA with the country prefix and no label: accepted only with a valid check digit
+        for m in re.finditer(r'\bIT ?\d{11}\b', working_text):
+            if is_valid_partita_iva(m.group(0)):
+                entities.append({"raw": m.group(0), "category": "PARTITA_IVA"})
 
         email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b'
         for m in re.finditer(email_pattern, working_text):

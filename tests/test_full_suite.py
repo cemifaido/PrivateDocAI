@@ -180,6 +180,26 @@ class TestFullPrivateDocSuite(unittest.TestCase):
         self.assertEqual(restored, text)
         self.assertEqual(report, {"fuzzy": [], "unknown": []})
 
+    def _masked(self, text):
+        self.anonymizer.analyze_documents([{"id": "A", "filename": "a.txt", "text": text}])
+        return self.anonymizer.mask_text(text, doc_key="A")
+
+    def test_printed_iban_with_valid_checksum_is_masked(self):
+        masked = self._masked("Bonifico su IT60 X054 2811 1010 0000 0123 456 entro il termine.")
+        self.assertNotIn("X054", masked)
+        self.assertNotIn("0123", masked)
+        self.assertIn("[IBAN_1]", masked)
+
+    def test_printed_iban_with_wrong_checksum_is_not_guessed_but_compact_ones_stay_masked(self):
+        masked = self._masked("Codice IT61 X054 2811 1010 0000 0123 456 e IBAN IT61X0542811101000000123456.")
+        self.assertIn("IT61 X054", masked)              # printed form: only a valid checksum accepts it
+        self.assertNotIn("IT61X0542811101000000123456", masked)   # compact form: shape is enough, never dropped
+
+    def test_prefixed_vat_number_needs_a_valid_check_digit(self):
+        masked = self._masked("Sede legale, IT12345678903 e il codice IT12345678904.")
+        self.assertNotIn("IT12345678903", masked)
+        self.assertIn("IT12345678904", masked)
+
     def test_preflight_leak_verification(self):
         self.anonymizer.get_or_create_token("Mario Rossi", "PERSONA")
         
