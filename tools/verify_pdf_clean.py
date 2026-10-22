@@ -7,21 +7,24 @@ per certificare che i termini sensibili specificati siano stati FISICAMENTE
 rimossi dal documento e non semplicemente coperti graficamente.
 
 Superfici ispezionate:
-1. Pagine / Testo vettoriale (inclusi testi a capo, sillabati con trattino e bianco-su-bianco)
-2. Annotazioni (Sticky note, FreeText, evidenziazioni, commenti, pop-up)
-3. Metadati documento (dizionario Info: autore, titolo, oggetto, parole chiave, ecc.)
-4. Pacchetto metadati XMP (XML packet)
-5. Segnalibri / Sommario / Outline TOC
-6. File incorporati / Allegati (Embedded Files) con decompressione del contenuto
-7. Campi modulo / AcroForm (valori, etichette, nomi campo, tooltip)
-8. Livelli / Strati opzionali (OCG - Optional Content Groups)
-9. Stream decompressi di tutti gli oggetti PDF (xref streams con decodifica hex/literal)
-10. Scansione binaria grezza del file completo (anti-revisioni incrementali e trailer residui)
+1. Pagine / Testo vettoriale (tolleranza spazi, ritorni a capo, sillabazioni e bianco-su-bianco)
+2. Pagine scansionate / Immagini pure (segnalate come NON VERIFICABILI senza OCR, mai falsi puliti)
+3. Annotazioni (Sticky note, FreeText, evidenziazioni, commenti, pop-up)
+4. Collegamenti / Link (URI, destinazioni e file link)
+5. Metadati documento (dizionario Info: autore, titolo, oggetto, parole chiave, ecc.)
+6. Pacchetto metadati XMP (XML packet)
+7. Segnalibri / Sommario / Outline TOC
+8. File incorporati / Allegati (Embedded Files) con decompressione del contenuto
+9. Campi modulo / AcroForm (valori, etichette, nomi campo, tooltip)
+10. Livelli / Strati opzionali (OCG - Optional Content Groups)
+11. Tutti gli oggetti PDF e dizionari (Catalog, Names, Azioni JS, ecc.) con decodifica hex e literal
+12. Stream decompressi di tutti gli oggetti PDF (xref streams con decodifica hex <...> e literal)
+13. Scansione binaria grezza del file completo (anti-revisioni incrementali e trailer residui)
 
 Codice di uscita:
 - 0: Pulito al 100% (nessun residuo trovato per i termini specificati)
-- 1: Trovati residui dei termini sensibili (fallimento verifica / redazione incompleta)
-- 2: Errore di argomenti o file non trovato
+- 1: Trovati residui dei termini sensibili o pagine scansionate non verificabili
+- 2: Errore di argomenti, input non valido, PDF corrotto o protetto da password
 """
 
 from __future__ import annotations
@@ -37,9 +40,11 @@ from typing import Any
 import fitz  # PyMuPDF
 
 
-def _normalize_ws(text: str) -> str:
-    """Normalizza spaziature e a capo per ricerca tollerante ai ritorni a capo."""
-    return re.sub(r"\s+", " ", text).strip()
+def _normalise(value: str) -> str:
+    """Casefold rigoroso e rimozione di ogni spaziatura (contratto di matching PrivateDoc AI)."""
+    if not value or not isinstance(value, str):
+        return ""
+    return "".join(c for c in value.casefold() if not c.isspace())
 
 
 def _normalize_hyphen(text: str) -> str:
@@ -53,7 +58,6 @@ def _decode_pdf_literal(raw: bytes) -> str:
         oct_val = int(match.group(1), 8)
         return bytes([oct_val])
 
-    # Sostituisce \ddd ottale
     unescaped = re.sub(rb"\\([0-7]{1,3})", replace_octal, raw)
     unescaped = unescaped.replace(rb"\\n", b"\n")
     unescaped = unescaped.replace(rb"\\r", b"\r")
@@ -67,7 +71,7 @@ def _decode_pdf_literal(raw: bytes) -> str:
 
 
 def _decode_hex_strings(stream: bytes) -> list[bytes]:
-    """Estrae e decodifica tutte le stringhe esadecimali <...> presenti in uno stream PDF."""
+    """Estrae e decodifica tutte le stringhe esadecimali <...> presenti in uno stream o dizionario PDF."""
     decoded_list = []
     matches = re.findall(rb"<([0-9a-fA-F\s]+)>", stream)
     for h in matches:
@@ -81,18 +85,28 @@ def _decode_hex_strings(stream: bytes) -> list[bytes]:
     return decoded_list
 
 
-def scan_page_text(doc: fitz.Document, terms: list[str]) -> list[dict[str, Any]]:
-    """Scansiona il livello testo di tutte le pagine."""
+def scan_page_text_and_images(doc: fitz.Document, terms: list[str]) -> list[dict[str, Any]]:
+    """Scansiona il livello testo di tutte le pagine e rileva pagine immagine non verificabili."""
     findings = []
     for page_idx in range(len(doc)):
         page = doc[page_idx]
         raw_text = page.get_text("text")
-        norm_text = _normalize_ws(raw_text).lower()
-        hyphen_norm_text = _normalize_ws(_normalize_hyphen(raw_text)).lower()
+        norm_text = _normalise(raw_text)
+        hyphen_norm_text = _normalise(_normalize_hyphen(raw_text))
+
+        # Controllo anti-falso pulito: se la pagina contiene immagini ma zero testo vettoriale
+        # la scansione grafica non puo' essere garantita senza OCR.
+        if page.get_images(full=True) and not norm_text:
+            findings.append({
+                "surface": "scanned_image_unverifiable",
+                "page": page_idx + 1,
+                "type": "missing_text_layer",
+                "detail": f"Pagina {page_idx + 1} contiene immagini senza livello testo: non verificabile senza OCR",
+            })
 
         for term in terms:
-            term_clean = _normalize_ws(term).lower()
-            if not term_clean:
+            term_norm = _normalise(term)
+            if not term_norm:
                 continue
 
             # 1. Ricerca con search_for nativo di PyMuPDF (geometria)
@@ -108,16 +122,16 @@ def scan_page_text(doc: fitz.Document, terms: list[str]) -> list[dict[str, Any]]
                 })
                 continue
 
-            # 2. Ricerca nel testo normalizzato (intercetta spezzature su righe)
-            if term_clean in norm_text:
+            # 2. Ricerca nel testo normalizzato (casefold + spazi ignorati, intercetta a capo)
+            if term_norm in norm_text:
                 findings.append({
                     "surface": "page_text",
                     "term": term,
                     "page": page_idx + 1,
                     "type": "normalized_text_wrap",
-                    "detail": "Termine trovato nel testo normalizzato (probabile a capo)",
+                    "detail": "Termine trovato nel testo normalizzato (probabile ritorno a capo)",
                 })
-            elif term_clean in hyphen_norm_text:
+            elif term_norm in hyphen_norm_text:
                 findings.append({
                     "surface": "page_text",
                     "term": term,
@@ -133,7 +147,10 @@ def scan_annotations(doc: fitz.Document, terms: list[str]) -> list[dict[str, Any
     findings = []
     for page_idx in range(len(doc)):
         page = doc[page_idx]
-        for annot in page.annots():
+        annots = page.annots()
+        if not annots:
+            continue
+        for annot in annots:
             info = annot.info or {}
             annot_text = " ".join([
                 str(info.get("content", "")),
@@ -146,10 +163,10 @@ def scan_annotations(doc: fitz.Document, terms: list[str]) -> list[dict[str, Any
             except Exception:
                 pass
 
-            norm_annot = _normalize_ws(annot_text).lower()
+            norm_annot = _normalise(annot_text)
             for term in terms:
-                term_clean = _normalize_ws(term).lower()
-                if term_clean and term_clean in norm_annot:
+                term_norm = _normalise(term)
+                if term_norm and term_norm in norm_annot:
                     findings.append({
                         "surface": "annotation",
                         "term": term,
@@ -160,17 +177,37 @@ def scan_annotations(doc: fitz.Document, terms: list[str]) -> list[dict[str, Any
     return findings
 
 
-def scan_metadata(doc: fitz.Document, terms: list[str]) -> list[dict[str, Any]]:
+def scan_links(doc: fitz.Document, terms: list[str]) -> list[dict[str, Any]]:
+    """Scansiona i link presenti su tutte le pagine (URI, file, destinazioni)."""
+    findings = []
+    for page_idx in range(len(doc)):
+        page = doc[page_idx]
+        for link in page.get_links():
+            link_text = " ".join(str(v) for v in link.values() if v)
+            norm_link = _normalise(link_text)
+            for term in terms:
+                term_norm = _normalise(term)
+                if term_norm and term_norm in norm_link:
+                    findings.append({
+                        "surface": "link",
+                        "term": term,
+                        "page": page_idx + 1,
+                        "detail": link_text[:120],
+                    })
+    return findings
+
+
+def scan_metadata(doc: fitz.Document, terms: list[str], errors: list[str]) -> list[dict[str, Any]]:
     """Scansiona il dizionario Info e i metadati XMP."""
     findings = []
     meta = doc.metadata or {}
     for key, val in meta.items():
         if not val or not isinstance(val, str):
             continue
-        norm_val = _normalize_ws(val).lower()
+        norm_val = _normalise(val)
         for term in terms:
-            term_clean = _normalize_ws(term).lower()
-            if term_clean and term_clean in norm_val:
+            term_norm = _normalise(term)
+            if term_norm and term_norm in norm_val:
                 findings.append({
                     "surface": "metadata_info",
                     "term": term,
@@ -178,47 +215,45 @@ def scan_metadata(doc: fitz.Document, terms: list[str]) -> list[dict[str, Any]]:
                     "detail": val[:120],
                 })
 
-    # Metadati XMP XML
     try:
         xmp = doc.get_xml_metadata() or ""
-        norm_xmp = _normalize_ws(xmp).lower()
+        norm_xmp = _normalise(xmp)
         for term in terms:
-            term_clean = _normalize_ws(term).lower()
-            if term_clean and term_clean in norm_xmp:
+            term_norm = _normalise(term)
+            if term_norm and term_norm in norm_xmp:
                 findings.append({
                     "surface": "metadata_xmp",
                     "term": term,
                     "detail": "Termine presente nel pacchetto XMP XML",
                 })
-    except Exception:
-        pass
+    except Exception as exc:
+        errors.append(f"Errore lettura XMP: {exc}")
 
     return findings
 
 
-def scan_outline(doc: fitz.Document, terms: list[str]) -> list[dict[str, Any]]:
+def scan_outline(doc: fitz.Document, terms: list[str], errors: list[str]) -> list[dict[str, Any]]:
     """Scansiona l'indice dei segnalibri (TOC / Outlines)."""
     findings = []
     try:
         toc = doc.get_toc(simple=False) or []
         for item in toc:
-            # item format: [lvl, title, page, dest]
             title = str(item[1]) if len(item) > 1 else ""
-            norm_title = _normalize_ws(title).lower()
+            norm_title = _normalise(title)
             for term in terms:
-                term_clean = _normalize_ws(term).lower()
-                if term_clean and term_clean in norm_title:
+                term_norm = _normalise(term)
+                if term_norm and term_norm in norm_title:
                     findings.append({
                         "surface": "outline_bookmark",
                         "term": term,
                         "detail": title[:100],
                     })
-    except Exception:
-        pass
+    except Exception as exc:
+        errors.append(f"Errore lettura TOC/outline: {exc}")
     return findings
 
 
-def scan_embedded_files(doc: fitz.Document, terms: list[str]) -> list[dict[str, Any]]:
+def scan_embedded_files(doc: fitz.Document, terms: list[str], errors: list[str]) -> list[dict[str, Any]]:
     """Scansiona i file incorporati (Embedded Files / Allegati)."""
     findings = []
     try:
@@ -226,20 +261,19 @@ def scan_embedded_files(doc: fitz.Document, terms: list[str]) -> list[dict[str, 
         for i in range(count):
             name = doc.embfile_info(i).get("filename", f"embfile_{i}")
             content = doc.embfile_get(i)
-            # Decodifica testo dell'allegato
             text_cand = content.decode("utf-8", errors="replace") + " " + content.decode("latin-1", errors="replace")
-            norm_content = _normalize_ws(name + " " + text_cand).lower()
+            norm_content = _normalise(name + " " + text_cand)
             for term in terms:
-                term_clean = _normalize_ws(term).lower()
-                if term_clean and term_clean in norm_content:
+                term_norm = _normalise(term)
+                if term_norm and term_norm in norm_content:
                     findings.append({
                         "surface": "embedded_file",
                         "term": term,
                         "filename": name,
                         "detail": f"Trovato nell'allegato incorporato '{name}'",
                     })
-    except Exception:
-        pass
+    except Exception as exc:
+        errors.append(f"Errore lettura file incorporati: {exc}")
     return findings
 
 
@@ -248,16 +282,19 @@ def scan_widgets(doc: fitz.Document, terms: list[str]) -> list[dict[str, Any]]:
     findings = []
     for page_idx in range(len(doc)):
         page = doc[page_idx]
-        for w in page.widgets():
+        widgets = page.widgets()
+        if not widgets:
+            continue
+        for w in widgets:
             widget_text = " ".join([
                 str(w.field_name or ""),
                 str(w.field_value or ""),
                 str(w.field_label or ""),
             ])
-            norm_w = _normalize_ws(widget_text).lower()
+            norm_w = _normalise(widget_text)
             for term in terms:
-                term_clean = _normalize_ws(term).lower()
-                if term_clean and term_clean in norm_w:
+                term_norm = _normalise(term)
+                if term_norm and term_norm in norm_w:
                     findings.append({
                         "surface": "form_field",
                         "term": term,
@@ -268,33 +305,33 @@ def scan_widgets(doc: fitz.Document, terms: list[str]) -> list[dict[str, Any]]:
     return findings
 
 
-def scan_ocgs(doc: fitz.Document, terms: list[str]) -> list[dict[str, Any]]:
+def scan_ocgs(doc: fitz.Document, terms: list[str], errors: list[str]) -> list[dict[str, Any]]:
     """Scansiona i nomi dei livelli opzionali (OCG)."""
     findings = []
     try:
         ocgs = doc.get_ocgs() or {}
         for xref, info in ocgs.items():
             name = info.get("name", "")
-            norm_name = _normalize_ws(name).lower()
+            norm_name = _normalise(name)
             for term in terms:
-                term_clean = _normalize_ws(term).lower()
-                if term_clean and term_clean in norm_name:
+                term_norm = _normalise(term)
+                if term_norm and term_norm in norm_name:
                     findings.append({
                         "surface": "ocg_layer_name",
                         "term": term,
                         "xref": xref,
                         "detail": name,
                     })
-    except Exception:
-        pass
+    except Exception as exc:
+        errors.append(f"Errore lettura OCG: {exc}")
     return findings
 
 
-def scan_decompressed_streams(doc: fitz.Document, terms: list[str]) -> list[dict[str, Any]]:
-    """Scansiona gli stream di tutti gli oggetti PDF decompressi, decodificando stringhe esadecimali e letterali."""
+def scan_objects_and_streams(doc: fitz.Document, terms: list[str], errors: list[str]) -> list[dict[str, Any]]:
+    """Scansiona dizionari e stream decompressi di tutti gli oggetti PDF."""
     findings = []
-    # Prepara varianti binarie dei termini
     term_bytes_map = {}
+    term_hex_variants = {}
     for term in terms:
         t_clean = term.strip()
         if not t_clean:
@@ -306,55 +343,84 @@ def scan_decompressed_streams(doc: fitz.Document, terms: list[str]) -> list[dict
             t_clean.encode("utf-16-le"),
             t_clean.lower().encode("utf-8"),
         ]
+        term_hex_variants[term] = [
+            t_clean.encode("utf-8").hex().casefold(),
+            t_clean.encode("utf-16-be").hex().casefold(),
+            t_clean.encode("utf-16-le").hex().casefold(),
+        ]
 
     for xref in range(1, doc.xref_length()):
         try:
-            if not doc.xref_is_stream(xref):
-                continue
-            stream = doc.xref_stream(xref)
-            if not stream:
-                continue
+            # 1. Scansione dizionario oggetto non compresso
+            obj_str = doc.xref_object(xref, compressed=False)
+            norm_obj = _normalise(obj_str)
+            obj_lower = obj_str.casefold()
 
-            stream_lower = stream.lower()
-            # 1. Ricerca diretta nei byte dello stream
-            for term, patterns in term_bytes_map.items():
-                found_direct = any(p in stream or p in stream_lower for p in patterns)
-                if found_direct:
+            for term in terms:
+                term_norm = _normalise(term)
+                if term_norm and term_norm in norm_obj:
                     findings.append({
-                        "surface": "decompressed_stream",
+                        "surface": "object_dictionary",
                         "term": term,
                         "xref": xref,
-                        "type": "direct_byte_match",
+                        "type": "dictionary_text_match",
                     })
-                    continue
 
-            # 2. Ricerca nelle stringhe esadecimali <...> decodificate
-            hex_chunks = _decode_hex_strings(stream)
-            for chunk in hex_chunks:
-                chunk_lower = chunk.lower()
-                for term, patterns in term_bytes_map.items():
-                    if any(p in chunk or p in chunk_lower for p in patterns):
+                # Ricerca stringhe hex nei dizionari
+                for h_var in term_hex_variants.get(term, []):
+                    if h_var in obj_lower:
                         findings.append({
-                            "surface": "decompressed_stream",
+                            "surface": "object_dictionary",
                             "term": term,
                             "xref": xref,
-                            "type": "decoded_hex_string",
+                            "type": "dictionary_hex_match",
                         })
 
-            # 3. Ricerca nelle stringhe letterali (...) con escape ottali
-            literal_matches = re.findall(rb"\((.*?)\)", stream, re.DOTALL)
-            for lit in literal_matches:
-                decoded_lit = _decode_pdf_literal(lit).lower()
-                for term in terms:
-                    if term.lower() in decoded_lit:
-                        findings.append({
-                            "surface": "decompressed_stream",
-                            "term": term,
-                            "xref": xref,
-                            "type": "decoded_literal_string",
-                        })
-        except Exception:
-            continue
+            # 2. Scansione stream decompressi
+            if doc.xref_is_stream(xref):
+                stream = doc.xref_stream(xref)
+                if stream:
+                    stream_lower = stream.lower()
+                    # Ricerca diretta nei byte dello stream
+                    for term, patterns in term_bytes_map.items():
+                        found_direct = any(p in stream or p in stream_lower for p in patterns)
+                        if found_direct:
+                            findings.append({
+                                "surface": "decompressed_stream",
+                                "term": term,
+                                "xref": xref,
+                                "type": "direct_byte_match",
+                            })
+
+                    # Ricerca nelle stringhe esadecimali <...> decodificate
+                    hex_chunks = _decode_hex_strings(stream)
+                    for chunk in hex_chunks:
+                        chunk_lower = chunk.lower()
+                        for term, patterns in term_bytes_map.items():
+                            if any(p in chunk or p in chunk_lower for p in patterns):
+                                findings.append({
+                                    "surface": "decompressed_stream",
+                                    "term": term,
+                                    "xref": xref,
+                                    "type": "decoded_hex_string",
+                                })
+
+                    # Ricerca nelle stringhe letterali (...) con escape ottali
+                    literal_matches = re.findall(rb"\((.*?)\)", stream, re.DOTALL)
+                    for lit in literal_matches:
+                        decoded_lit = _decode_pdf_literal(lit)
+                        norm_lit = _normalise(decoded_lit)
+                        for term in terms:
+                            term_norm = _normalise(term)
+                            if term_norm and term_norm in norm_lit:
+                                findings.append({
+                                    "surface": "decompressed_stream",
+                                    "term": term,
+                                    "xref": xref,
+                                    "type": "decoded_literal_string",
+                                })
+        except Exception as exc:
+            errors.append(f"Errore ispezione oggetto xref {xref}: {exc}")
 
     return findings
 
@@ -373,6 +439,8 @@ def scan_file_binary(pdf_bytes: bytes, terms: list[str]) -> list[dict[str, Any]]
             t_clean.encode("utf-16-be"),
             t_clean.encode("utf-16-le"),
             t_clean.lower().encode("utf-8"),
+            t_clean.encode("utf-8").hex().encode("ascii"),
+            t_clean.encode("utf-16-be").hex().encode("ascii"),
         ]
         if any(p in pdf_bytes or p in bytes_lower for p in patterns):
             findings.append({
@@ -391,36 +459,60 @@ def verify_pdf(
 ) -> dict[str, Any]:
     """Esegue la scansione completa di un PDF su tutte le superfici note.
 
-    Ritorna un dizionario con esito di pulizia e dettaglio puntuale di ciascun residuo trovato.
+    Valida rigorosamente gli input e ritorna un dizionario con l'esito di pulizia.
+    Solleva ValueError se i termini sono vuoti o il PDF non e' leggibile/protetto.
     """
+    if not isinstance(terms, (list, tuple, set)):
+        raise ValueError("L'argomento 'terms' deve essere una lista di stringhe.")
+    valid_terms = [t.strip() for t in terms if isinstance(t, str) and _normalise(t)]
+    if not valid_terms:
+        raise ValueError("Nessun dato valido specificato da verificare (termini vuoti o composti da soli spazi).")
+
     if isinstance(pdf_source, (str, Path)):
         p = Path(pdf_source)
         if not p.is_file():
             raise FileNotFoundError(f"File PDF non trovato: {p}")
         pdf_bytes = p.read_bytes()
         pdf_name = p.name
-    else:
-        pdf_bytes = pdf_source
+    elif isinstance(pdf_source, (bytes, bytearray)):
+        pdf_bytes = bytes(pdf_source)
         pdf_name = "<in-memory-bytes>"
+    else:
+        raise ValueError("pdf_source deve essere un percorso di file o una sequenza di byte.")
 
-    doc = fitz.open("pdf", pdf_bytes)
+    if not pdf_bytes:
+        raise ValueError("Il PDF specificato è vuoto (0 byte).")
 
-    findings: list[dict[str, Any]] = []
-    findings.extend(scan_page_text(doc, terms))
-    findings.extend(scan_annotations(doc, terms))
-    findings.extend(scan_metadata(doc, terms))
-    findings.extend(scan_outline(doc, terms))
-    findings.extend(scan_embedded_files(doc, terms))
-    findings.extend(scan_widgets(doc, terms))
-    findings.extend(scan_ocgs(doc, terms))
-    findings.extend(scan_decompressed_streams(doc, terms))
+    try:
+        doc = fitz.open("pdf", pdf_bytes)
+    except Exception as exc:
+        raise ValueError(f"File non riconosciuto come PDF valido: {exc}") from exc
 
-    if not ignore_raw_binary:
-        findings.extend(scan_file_binary(pdf_bytes, terms))
+    try:
+        if doc.needs_pass:
+            raise ValueError("I PDF protetti da password non sono supportati.")
+        if doc.page_count == 0:
+            raise ValueError("Il PDF non contiene pagine.")
 
-    doc.close()
+        errors: list[str] = []
+        findings: list[dict[str, Any]] = []
 
-    # Rimuove duplicati esatti per pulizia report
+        findings.extend(scan_page_text_and_images(doc, valid_terms))
+        findings.extend(scan_annotations(doc, valid_terms))
+        findings.extend(scan_links(doc, valid_terms))
+        findings.extend(scan_metadata(doc, valid_terms, errors))
+        findings.extend(scan_outline(doc, valid_terms, errors))
+        findings.extend(scan_embedded_files(doc, valid_terms, errors))
+        findings.extend(scan_widgets(doc, valid_terms))
+        findings.extend(scan_ocgs(doc, valid_terms, errors))
+        findings.extend(scan_objects_and_streams(doc, valid_terms, errors))
+
+        if not ignore_raw_binary:
+            findings.extend(scan_file_binary(pdf_bytes, valid_terms))
+    finally:
+        doc.close()
+
+    # Rimuove duplicati esatti per pulizia del report
     seen = set()
     unique_findings = []
     for f in findings:
@@ -429,21 +521,22 @@ def verify_pdf(
             seen.add(key)
             unique_findings.append(f)
 
-    is_clean = (len(unique_findings) == 0)
+    is_clean = (len(unique_findings) == 0 and len(errors) == 0)
     return {
         "pdf_name": pdf_name,
         "clean": is_clean,
-        "terms_checked": terms,
+        "terms_checked": valid_terms,
         "findings_count": len(unique_findings),
         "findings": unique_findings,
+        "errors": errors,
     }
 
 
 def self_test() -> int:
-    """Auto-test interno del verificatore su PDF sintetici noti puliti e contaminati."""
-    print("Avvio self-test di verify_pdf_clean...")
+    """Suite di auto-test interna per validare rilevazione, anti-falso pulito ed eccezioni."""
+    print("Avvio self-test approfondito di verify_pdf_clean...")
 
-    # 1. Crea un PDF contaminato su più superfici
+    # 1. Rilevazione su PDF contaminato
     doc = fitz.open()
     p = doc.new_page()
     p.insert_text((50, 50), "Testo con Mario Rossi presente.")
@@ -453,14 +546,14 @@ def self_test() -> int:
     doc.close()
 
     res_dirty = verify_pdf(dirty_bytes, ["Mario Rossi"])
-    assert not res_dirty["clean"], "Il PDF contaminato doveva essere rilevato come non pulito!"
-    surfaces_found = {f["surface"] for f in res_dirty["findings"]}
-    assert "page_text" in surfaces_found
-    assert "annotation" in surfaces_found
-    assert "metadata_info" in surfaces_found
-    print("  + Rilevazione corretta su PDF contaminato: PASS")
+    assert not res_dirty["clean"], "PDF contaminato doveva fallire!"
+    surfaces = {f["surface"] for f in res_dirty["findings"]}
+    assert "page_text" in surfaces
+    assert "annotation" in surfaces
+    assert "metadata_info" in surfaces
+    print("  + Rilevazione contaminazioni standard: PASS")
 
-    # 2. Crea un PDF pulito (nessun termine presente)
+    # 2. Validazione su PDF pulito
     doc_clean = fitz.open()
     p_c = doc_clean.new_page()
     p_c.insert_text((50, 50), "Testo purificato e anonimizzato.")
@@ -468,9 +561,41 @@ def self_test() -> int:
     doc_clean.close()
 
     res_clean = verify_pdf(clean_bytes, ["Mario Rossi"])
-    assert res_clean["clean"], "Il PDF pulito doveva risultare pulito!"
+    assert res_clean["clean"], "PDF pulito doveva passare!"
     assert res_clean["findings_count"] == 0
-    print("  + Validazione corretta su PDF pulito: PASS")
+    print("  + Validazione documento pulito: PASS")
+
+    # 3. Anti-falso pulito su scansioni (immagini senza testo)
+    from PIL import Image as PilImage
+    import io as pyio
+    img = PilImage.new("RGB", (100, 100), color=(200, 200, 200))
+    buf = pyio.BytesIO()
+    img.save(buf, format="PNG")
+    doc_scan = fitz.open()
+    p_s = doc_scan.new_page()
+    p_s.insert_image(fitz.Rect(50, 50, 250, 250), stream=buf.getvalue())
+    scan_bytes = doc_scan.tobytes()
+    doc_scan.close()
+
+    res_scan = verify_pdf(scan_bytes, ["Mario Rossi"])
+    assert not res_scan["clean"], "Scansione grafica doveva essere segnalata come NON verificabile!"
+    assert any(f["surface"] == "scanned_image_unverifiable" for f in res_scan["findings"])
+    print("  + Anti-falso pulito su scansioni senza OCR: PASS")
+
+    # 4. Validazione input vuoto
+    try:
+        verify_pdf(clean_bytes, ["", "   "])
+        assert False, "Doveva sollevare ValueError per termini vuoti!"
+    except ValueError:
+        print("  + Rifiuto termini vuoti/spazi: PASS")
+
+    # 5. Matching casefold e spazi ignorati (contratto PrivateDoc AI)
+    doc_ws = fitz.open()
+    doc_ws.new_page().insert_text((50, 50), "M a r i o   R o s s i")
+    res_ws = verify_pdf(doc_ws.tobytes(), ["Mario Rossi"])
+    doc_ws.close()
+    assert not res_ws["clean"], "Doveva intercettare 'M a r i o   R o s s i' con spazi multipli/interni!"
+    print("  + Matching tollerante spazi interni: PASS")
 
     print("[SELF-TEST SUPERATO CON SUCCESSO]")
     return 0
@@ -491,13 +616,17 @@ def main() -> int:
     if args.self_test:
         return self_test()
 
-    # Modalità verifica tramite manifest.json
+    # Modalita' verifica tramite manifest.json
     if args.manifest:
         if not args.manifest.is_file():
             print(f"Errore: manifest non trovato: {args.manifest}", file=sys.stderr)
             return 2
-        with open(args.manifest, encoding="utf-8") as f:
-            manifest_data = json.load(f)
+        try:
+            with open(args.manifest, encoding="utf-8") as f:
+                manifest_data = json.load(f)
+        except Exception as exc:
+            print(f"Errore lettura manifest: {exc}", file=sys.stderr)
+            return 2
 
         base_dir = args.corpus_dir or args.manifest.parent
         items = manifest_data.get("documenti", [])
@@ -514,15 +643,24 @@ def main() -> int:
                 overall_clean = False
                 continue
 
-            report = verify_pdf(pdf_path, terms)
+            try:
+                report = verify_pdf(pdf_path, terms)
+            except Exception as exc:
+                print(f"  [ERRORE] {item['filename']}: {exc}", file=sys.stderr)
+                overall_clean = False
+                continue
+
             report["guaranteed"] = guaranteed
             results.append(report)
 
-            status_badge = "[PULITO]" if report["clean"] else f"[RESIDUI: {report['findings_count']}]"
+            status_badge = "[PULITO]" if report["clean"] else f"[RESIDUI/NON VERIFICABILE: {report['findings_count']}]"
             print(f"  * {item['filename']:32s} {status_badge}")
             if not report["clean"]:
                 for f in report["findings"][:3]:
-                    print(f"      - {f['surface']}: termine '{f['term']}' ({f.get('detail', f.get('type', ''))})")
+                    surface = f.get("surface")
+                    term = f.get("term", "")
+                    detail = f.get("detail", f.get("type", ""))
+                    print(f"      - {surface}: {term} ({detail})")
                 if len(report["findings"]) > 3:
                     print(f"      ... e altri {len(report['findings']) - 3} riscontri")
                 overall_clean = False
@@ -532,7 +670,7 @@ def main() -> int:
 
         return 0 if overall_clean else 1
 
-    # Modalità singolo PDF
+    # Modalita' singolo PDF
     if not args.pdf:
         parser.error("Specificare un file PDF oppure --manifest / --self-test")
 
@@ -549,27 +687,35 @@ def main() -> int:
                 terms.append(line_str)
 
     if not terms:
-        parser.error("Nessun termine specificato (usare --terms o --terms-file)")
+        print("Errore: nessun termine specificato (usare --terms o --terms-file)", file=sys.stderr)
+        return 2
 
     try:
         report = verify_pdf(args.pdf, terms)
-    except Exception as e:
-        print(f"Errore durante l'ispezione: {e}", file=sys.stderr)
+    except FileNotFoundError as exc:
+        print(f"Errore file: {exc}", file=sys.stderr)
+        return 2
+    except ValueError as exc:
+        print(f"Errore validazione: {exc}", file=sys.stderr)
+        return 2
+    except Exception as exc:
+        print(f"Errore imprevisto durante l'ispezione: {exc}", file=sys.stderr)
         return 2
 
     if args.json:
         print(json.dumps(report, indent=2, ensure_ascii=False))
     else:
         print(f"Esito ispezione PDF: {report['pdf_name']}")
-        print(f"Termini controllati ({len(terms)}): {', '.join(terms)}")
+        print(f"Termini controllati ({len(report['terms_checked'])}): {', '.join(report['terms_checked'])}")
         if report["clean"]:
             print("[VERIFICA SUPERATA] Nessun residuo rilevato su alcuna superficie.")
         else:
-            print(f"[VERIFICA FALLITA] Rilevati {report['findings_count']} residui:")
+            print(f"[VERIFICA FALLITA] Rilevati {report['findings_count']} riscontri:")
             for f in report["findings"]:
                 detail = f.get("detail", f.get("type", ""))
                 pg_str = f" (pag. {f['page']})" if "page" in f else ""
-                print(f"  - [{f['surface']}{pg_str}] Termine '{f['term']}': {detail}")
+                term_str = f" Termine '{f['term']}':" if "term" in f else ""
+                print(f"  - [{f['surface']}{pg_str}]{term_str} {detail}")
 
     return 0 if report["clean"] else 1
 
