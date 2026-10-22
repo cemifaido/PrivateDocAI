@@ -1406,10 +1406,15 @@ async function refreshPreflight() {
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({session_id: state.sessionId, instruction: userInstructionInput.value || ''})
         });
+        if (!resp.ok) throw new Error(`risposta ${resp.status}`);
         const pf = await resp.json();
         renderPreflight(pf);
     } catch (e) {
         console.error("Error refreshing preflight:", e);
+        preflightBox.className = 'preflight-box warn';
+        preflightBox.innerHTML = `⚠ Il controllo non è riuscito (${escapeHtml(e.message)}). Riprova; se si ripete, riapri la pratica.` +
+            `<div style="margin-top:10px;"><button type="button" class="preflight-btn" data-action="RECHECK">↻ Ricontrolla</button></div>`;
+        preflightBox.style.display = 'block';
     }
 }
 
@@ -1637,7 +1642,8 @@ function renderPreflight(pf) {
         html = `<div style="color:var(--accent-emerald); font-weight:600;">✅ Controllo superato</div>` +
                `<p style="margin:4px 0 0 0; font-size:0.85rem; color:var(--text-secondary);">Nessun dato sensibile rilevato in chiaro nel testo che verrà inviato.</p>`;
     }
-    html += `<div style="margin-top:10px;"><button type="button" class="preflight-btn" data-action="RECHECK">↻ Ricontrolla</button></div>`;
+    html += `<div style="margin-top:10px; display:flex; align-items:center; gap:12px;"><button type="button" class="preflight-btn" data-action="RECHECK">↻ Ricontrolla</button>` +
+            `<span style="font-size:0.78rem; color:var(--text-muted);">Ultimo controllo: ${new Date().toLocaleTimeString('it-IT')}</span></div>`;
     preflightBox.innerHTML = html;
     preflightBox.style.display = 'block';
 }
@@ -1656,6 +1662,8 @@ preflightBox.addEventListener('click', (e) => {
 
 async function handlePreflightAction(action, term, token) {
     if (action === 'RECHECK') {
+        const btn = preflightBox.querySelector('button[data-action="RECHECK"]');
+        if (btn) { btn.disabled = true; btn.textContent = '⏳ Controllo in corso…'; }
         await refreshPreflight();
         return;
     }
