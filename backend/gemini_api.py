@@ -18,7 +18,7 @@ from .model_downloader import default_opener
 
 ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 MODEL_PATTERN = re.compile(r"^[a-z0-9][a-z0-9.\-]{2,60}$")
-KEY_PATTERN = re.compile(r"^[A-Za-z0-9_\-]{20,200}$")
+KEY_PATTERN = re.compile(r"^[A-Za-z0-9_.\-]{20,200}$")
 
 
 class GeminiApiError(Exception):

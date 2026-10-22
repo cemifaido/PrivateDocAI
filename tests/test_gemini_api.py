@@ -127,6 +127,8 @@ class TestThroughTheApi(unittest.TestCase):
     def test_bad_key_or_model_formats_are_refused(self):
         self.assertEqual(self.post(key="troppo corta").status_code, 400)
         self.assertEqual(self.post(model="Modello Con Spazi").status_code, 400)
+        # Le chiavi recenti di Google AI Studio possono avere prefisso AQ. e contenere punti
+        self.assertEqual(self.post(key="AQ.FakeTestKeyNotARealKey0123456789abcdefghijklmnop").status_code, 200)
 
     def test_execution_through_the_api_restores_the_real_data_after_the_usual_check(self):
         text = "Il Sig. Mario Rossi firma.".encode()
