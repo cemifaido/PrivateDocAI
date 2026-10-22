@@ -6,11 +6,12 @@ from typing import List, Optional, Dict
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from backend.document_service import DocumentService, SessionInvalidated, UploadBusy
 from backend.vault import Vault, VaultError, WrongPassword
+from backend.pdf_redaction import PdfRedactionError, RedactionIncomplete
 from backend.runtime import RESOURCE_DIR
 
 app = FastAPI(title="PrivateDoc AI - Privacy & Multi-Format LLM Hub")
@@ -483,6 +484,33 @@ async def deanonymize_manual(data: DeanonymizeManualRequest):
     """
     processed = doc_service.process_llm_response(data.session_id, data.raw_response)
     return {"status": "success", "result": processed}
+
+@app.post("/api/export/pdf")
+async def export_pdf(session_id: str = Form(...), mode: str = Form("nero"), file: UploadFile = File(...)):
+    """
+    PDF with the protected data really removed. The original is received here, processed in
+    memory and discarded: it is never saved in the case. Delivered only after the check found
+    nothing left; scanned PDFs (images) are refused.
+    """
+    contents = bytearray()
+    while chunk := await file.read(UPLOAD_CHUNK_BYTES):
+        contents.extend(chunk)
+        if len(contents) > MAX_UPLOAD_FILE_BYTES:
+            raise HTTPException(status_code=413, detail="Il file supera il limite di 50 MB.")
+    try:
+        pdf, report = await run_in_threadpool(doc_service.export_redacted_pdf, session_id, bytes(contents), mode)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Pratica non trovata.")
+    except RedactionIncomplete as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except PdfRedactionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    removed = sum(item["removed"] for item in report["terms"].values())
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "_", os.path.splitext(os.path.basename(file.filename or "documento"))[0]) or "documento"
+    return Response(content=pdf, media_type="application/pdf", headers={
+        "Content-Disposition": f'attachment; filename="{stem}_censurato.pdf"',
+        "X-PrivateDoc-Removed": str(removed),
+    })
 
 @app.get("/api/export/docx")
 async def export_docx(session_id: str):

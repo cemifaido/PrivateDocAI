@@ -1098,6 +1098,45 @@ function showResults() {
     renderResultContent();
 }
 
+// ---------- PDF with the protected data really removed (the original is not stored: it is chosen again here) ----------
+document.getElementById('exportPdfBtn').addEventListener('click', () => {
+    if (!state.sessionId) return;
+    if (!confirm("Scegli il PDF originale da censurare.\n\nIl programma non lo conserva: lo elabora in memoria, rimuove dal file " +
+                 "tutti i dati protetti di questa pratica e lo scarta. Il PDF viene consegnato solo se, riletto, non contiene più nessun dato. " +
+                 "I PDF che sono solo immagini (scansioni) non sono supportati.\n\nContinuare?")) return;
+    document.getElementById('exportPdfInput').click();
+});
+document.getElementById('exportPdfInput').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    const asLabel = confirm("Come vuoi indicare i dati rimossi?\n\nOK = con l'etichetta del codice (es. [PERSONA_1])\nAnnulla = riquadro nero");
+    const form = new FormData();
+    form.append('session_id', state.sessionId);
+    form.append('mode', asLabel ? 'etichetta' : 'nero');
+    form.append('file', file);
+    try {
+        const resp = await fetch('/api/export/pdf', {method: 'POST', body: form});
+        if (!resp.ok) {
+            let detail = 'Esportazione non riuscita.';
+            try { detail = (await resp.json()).detail || detail; } catch { /* not JSON */ }
+            alert('PDF non consegnato: ' + detail);
+            return;
+        }
+        const blob = await resp.blob();
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = file.name.replace(/\.pdf$/i, '') + '_censurato.pdf';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+        alert(`PDF censurato scaricato (${resp.headers.get('X-PrivateDoc-Removed') || '?'} occorrenze rimosse e verificate). Controllalo comunque a occhio.`);
+    } catch (err) {
+        alert('Errore durante l\'esportazione: ' + err.message);
+    }
+});
+
 function renderRestoreNotice(report) {
     const box = document.getElementById('restoreNotice');
     if (!box) return;

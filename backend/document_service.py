@@ -13,6 +13,7 @@ from .browser_bridge import BrowserBridge
 from .vault import Vault
 from .ner import NerDetector
 from .model_downloader import ModelDownloader
+from .pdf_redaction import PdfRedactionError, redact_pdf
 
 # Type aliases for clean code
 Tuple_Session = Dict[str, Any]
@@ -72,6 +73,23 @@ class DocumentService:
                 custom[ident] = " ".join(name.split())[:40]
                 self.vault.save_library("categorie", {"custom": custom})
         return ident
+
+    def export_redacted_pdf(self, session_id: str, data: bytes, mode: str):
+        """
+        Removes from ONE PDF (received just now, never stored) every datum protected in the case.
+        Raises PdfRedactionError / RedactionIncomplete: nothing is delivered unless it was verified.
+        """
+        with self._state_lock:
+            session = self.sessions.get(session_id)
+            if session is None:
+                raise KeyError(session_id)
+            anonymizer = session["anonymizer"]
+            # every protected form (names, surnames, defined terms...), the longest first
+            labels = {key: token for key, token in anonymizer.forward_map.items() if len(key.strip()) >= 3}
+        terms = sorted(labels, key=len, reverse=True)
+        if not terms:
+            raise PdfRedactionError("Nella pratica non c'è nessun dato protetto da censurare.")
+        return redact_pdf(data, terms, mode=mode, labels=labels)
 
     def reload_detector(self) -> None:
         """Puts a fresh detector over the (newly installed) model folder, keeping the user's settings."""
