@@ -13,9 +13,9 @@ Examples::
     python tools/benchmark_onnx_int8.py --model-dir MODEL --prepare-onnx C:/tmp/ner-onnx
     python tools/benchmark_onnx_int8.py --model-dir MODEL --onnx-int8 C:/tmp/ner-onnx/model.int8.onnx
 
-Export requires ``onnx``. Recent PyTorch exporters also require ``onnxscript``;
-quantization requires ``onnx`` plus ``onnxruntime``. Missing packages are reported
-and never installed by this script.
+The legacy exporter used for ModernBERT requires ``onnx``; quantization requires
+``onnx`` plus ``onnxruntime``. Missing packages are reported and never installed by
+this script.
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ import sys
 import time
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -53,6 +53,7 @@ SYNTHETIC_CASES = [
     ("Addebito simulato sulla carta 5555-5555-5555-4444.", "5555-5555-5555-4444", "CARTA_PAGAMENTO"),
     ("Numero carta per collaudo: 378282246310005.", "378282246310005", "CARTA_PAGAMENTO"),
 ]
+ADOPTION_CATEGORIES = ("SOCIETA", "CAP", "CARTA_PAGAMENTO", "PERSONA")
 
 
 def module_available(name: str) -> bool:
@@ -85,7 +86,7 @@ def matches(candidate: dict[str, Any], gold: dict[str, Any]) -> bool:
     return actual == expected or actual in expected or expected in actual
 
 
-def process_memory_mb() -> float | None:
+def process_memory_mb(*, peak: bool = False) -> float | None:
     """Current working set, without adding psutil as a prototype dependency."""
     if os.name == "nt":
         import ctypes
@@ -113,7 +114,8 @@ def process_memory_mb() -> float | None:
         psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD]
         psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
         ok = psapi.GetProcessMemoryInfo(kernel32.GetCurrentProcess(), ctypes.byref(counters), counters.cb)
-        return counters.WorkingSetSize / (1024 * 1024) if ok else None
+        value = counters.PeakWorkingSetSize if peak else counters.WorkingSetSize
+        return value / (1024 * 1024) if ok else None
     try:
         import resource
 
@@ -176,7 +178,7 @@ class OnnxBackend:
 
 
 def prepare_onnx(model_dir: Path, destination: Path) -> tuple[Path, Path]:
-    missing = [name for name in ("onnx", "onnxscript", "onnxruntime") if not module_available(name)]
+    missing = [name for name in ("onnx", "onnxruntime") if not module_available(name)]
     if missing:
         raise RuntimeError("export/quantizzazione non disponibili; moduli mancanti: " + ", ".join(missing))
 
@@ -203,23 +205,38 @@ def prepare_onnx(model_dir: Path, destination: Path) -> tuple[Path, Path]:
         output_names=["logits"],
         dynamic_axes=dynamic_axes,
         opset_version=18,
-        dynamo=True,
+        # The dynamo exporter currently records ModernBERT's local-attention
+        # padding with the example sequence length even when dynamic_axes is
+        # requested. The legacy exporter preserves the two dynamic axes here.
+        dynamo=False,
         external_data=True,
     )
     quantize_dynamic(
         str(fp32_path),
         str(int8_path),
         weight_type=QuantType.QInt8,
-        per_channel=True,
+        # Per-channel QInt8 made this ModernBERT checkpoint unusable in the
+        # prototype (near-zero recall). Per-tensor remains measurable, although
+        # its quality must still pass the report's adoption gate.
+        per_channel=False,
         use_external_data_format=True,
     )
     return fp32_path, int8_path
 
 
-def benchmark(name: str, detector: NerDetector, documents: list[dict[str, Any]], repeats: int) -> dict[str, Any]:
+def benchmark(
+    name: str,
+    detector_factory: Callable[[], NerDetector],
+    documents: list[dict[str, Any]],
+    repeats: int,
+) -> dict[str, Any]:
+    before_load = process_memory_mb()
+    detector = detector_factory()
     # Warm-up excludes one-time graph/model initialization from steady-state latency.
     detector.detect("Il documento di prova è firmato da Mario Rossi.")
-    before = process_memory_mb()
+    if detector.status()["state"] == "error":
+        raise RuntimeError(f"{name}: warm-up fallito: {detector.status()['reason']}")
+    after_load = process_memory_mb()
     latencies = []
     found_by_document = {}
     for document in documents:
@@ -228,12 +245,15 @@ def benchmark(name: str, detector: NerDetector, documents: list[dict[str, Any]],
         for _ in range(repeats):
             started = time.perf_counter()
             found = detector.detect(document["text"])
+            if detector.status()["state"] == "error":
+                raise RuntimeError(f"{name}: inferenza fallita: {detector.status()['reason']}")
             elapsed = time.perf_counter() - started
             words = max(1, len(document["text"].split()))
             samples.append(elapsed * 120 / words)
         latencies.append(statistics.median(samples))
         found_by_document[document["name"]] = found
     after = process_memory_mb()
+    peak = process_memory_mb(peak=True)
 
     category_hits = defaultdict(lambda: [0, 0])
     for document in documents:
@@ -256,7 +276,11 @@ def benchmark(name: str, detector: NerDetector, documents: list[dict[str, Any]],
             "p95": round(sorted(latencies)[min(len(latencies) - 1, round(0.95 * (len(latencies) - 1)))], 4),
         },
         "working_set_mb": None if after is None else round(after, 1),
-        "working_set_delta_mb": None if before is None or after is None else round(max(0.0, after - before), 1),
+        "peak_working_set_mb": None if peak is None else round(peak, 1),
+        "load_delta_mb": (None if before_load is None or after_load is None
+                          else round(max(0.0, after_load - before_load), 1)),
+        "run_delta_mb": (None if after_load is None or after is None
+                         else round(max(0.0, after - after_load), 1)),
     }
 
 
@@ -269,6 +293,17 @@ def make_detector(model_dir: Path, onnx_path: Path | None = None) -> NerDetector
     return detector
 
 
+def adoption_gate(fp32: dict[str, Any], int8: dict[str, Any]) -> dict[str, Any]:
+    """The aggregate score cannot hide a regression in a privacy-critical class."""
+    regressions = {}
+    for category in ADOPTION_CATEGORIES:
+        baseline = fp32["recall_by_category"][category]
+        candidate = int8["recall_by_category"][category]
+        if candidate["recall"] < baseline["recall"]:
+            regressions[category] = {"fp32": baseline, "int8": candidate}
+    return {"passed": not regressions, "regressions": regressions}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--model-dir", type=Path, required=True, help="verified local Hugging Face model folder")
@@ -276,6 +311,8 @@ def main() -> int:
     parser.add_argument("--gold", type=Path, default=ROOT / "tools" / "corpus_regressione" / "gold.json")
     parser.add_argument("--prepare-onnx", type=Path, help="export/quantize into this external directory")
     parser.add_argument("--onnx-int8", type=Path, help="benchmark an existing INT8 ONNX graph")
+    parser.add_argument("--backend", choices=("fp32", "int8", "both"), default="both",
+                        help="run backends separately for meaningful RAM numbers")
     parser.add_argument("--repeats", type=int, default=1)
     parser.add_argument("--out", type=Path, help="optional JSON output (may contain local performance data)")
     args = parser.parse_args()
@@ -292,17 +329,26 @@ def main() -> int:
     documents = read_corpus(args.corpus, args.gold)
     report = {
         "method": "model-only exact/containment recall; extended profile; CPU; warm-up excluded",
-        "fp32": benchmark("pytorch-fp32", make_detector(args.model_dir), documents, args.repeats),
+        "fp32": None,
         "int8": None,
     }
-    if args.onnx_int8:
+    if args.backend in ("fp32", "both"):
+        report["fp32"] = benchmark(
+            "pytorch-fp32", lambda: make_detector(args.model_dir), documents, args.repeats
+        )
+    if args.backend in ("int8", "both") and args.onnx_int8:
         if not args.onnx_int8.is_file():
             parser.error(f"file ONNX INT8 non trovato: {args.onnx_int8}")
         report["int8"] = benchmark(
-            "onnxruntime-int8", make_detector(args.model_dir, args.onnx_int8), documents, args.repeats
+            "onnxruntime-int8",
+            lambda: make_detector(args.model_dir, args.onnx_int8),
+            documents,
+            args.repeats,
         )
-    else:
-        report["int8_blocker"] = "grafo INT8 non fornito; usare --prepare-onnx quando onnx/onnxscript sono disponibili"
+    elif args.backend in ("int8", "both"):
+        report["int8_blocker"] = "grafo INT8 non fornito; usare --prepare-onnx quando onnx e onnxruntime sono disponibili"
+    if report["fp32"] is not None and report["int8"] is not None:
+        report["int8_adoption_gate"] = adoption_gate(report["fp32"], report["int8"])
 
     payload = json.dumps(report, ensure_ascii=False, indent=2)
     if args.out:
@@ -310,7 +356,8 @@ def main() -> int:
         print(f"Report scritto in {args.out}")
     else:
         print(payload)
-    return 0
+    gate = report.get("int8_adoption_gate")
+    return 3 if gate is not None and not gate["passed"] else 0
 
 
 if __name__ == "__main__":
