@@ -20,7 +20,7 @@ documenti ──► lettura locale ──► riconoscimento dati ──► testo
 1. **Carichi** file, cartelle intere (anche con sottocartelle) o archivi ZIP.
 2. **Scudo Privacy:** ogni dato riconosciuto riceve un codice, *sempre lo stesso* in tutti i documenti, così il modello può confrontarli senza sapere chi sono le parti. Puoi correggere, togliere o aggiungere dati (anche selezionando un testo e premendo il tasto destro).
 3. **Controllo pre-invio** sull'esatto testo in uscita: i dati riconosciuti ancora in chiaro bloccano l'invio; le parole sospette chiedono una conferma.
-4. **Invio:** automatico con Gemini; con ChatGPT e Claude si usa «Copia & Decifra» (copia il testo anonimo, incolla la risposta).
+4. **Invio:** con Gemini, ChatGPT e Claude si usa «Copia e apri» (copia il testo anonimo, apre il sito nel tuo browser normale, poi incolli la risposta); Google, OpenAI e Anthropic rifiutano i browser automatici e il programma non cerca di aggirare il controllo. Facoltativa e spenta di default: l'API ufficiale di Gemini con la tua chiave (vedi la guida in-app per le condizioni sui dati).
 5. **Risultato** con i dati reali, esportabile in Word. Dalla schermata dei dati protetti puoi anche creare una copia realmente censurata di un PDF originale.
 
 ## Caratteristiche
@@ -41,7 +41,6 @@ documenti ──► lettura locale ──► riconoscimento dati ──► testo
 
 Costruiscilo con `build_exe.bat` (richiede Python e le dipendenze) e copia l'**intera cartella** `dist\PrivateDocAI` sul PC. Avvia `PrivateDocAI.exe`: si apre il browser su `http://127.0.0.1:8765`. Al primo avvio scegli la password dell'archivio (almeno 12 caratteri) e **annotala: non è recuperabile**.
 
-- Per l'invio automatico a Gemini serve Google Chrome installato.
 - L'`.exe` non è firmato: Windows può mostrare un avviso.
 - Le cartelle `data` e `profiles` si creano accanto all'`.exe`: non distribuire una cartella già usata (`build_exe.bat` controlla che sia pulita).
 
