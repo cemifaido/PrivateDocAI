@@ -21,7 +21,7 @@ documenti ──► lettura locale ──► riconoscimento dati ──► testo
 2. **Scudo Privacy:** ogni dato riconosciuto riceve un codice, *sempre lo stesso* in tutti i documenti, così il modello può confrontarli senza sapere chi sono le parti. Puoi correggere, togliere o aggiungere dati (anche selezionando un testo e premendo il tasto destro).
 3. **Controllo pre-invio** sull'esatto testo in uscita: i dati riconosciuti ancora in chiaro bloccano l'invio; le parole sospette chiedono una conferma.
 4. **Invio:** automatico con Gemini; con ChatGPT e Claude si usa «Copia & Decifra» (copia il testo anonimo, incolla la risposta).
-5. **Risultato** con i dati reali, esportabile in Word.
+5. **Risultato** con i dati reali, esportabile in Word. Dalla schermata dei dati protetti puoi anche creare una copia realmente censurata di un PDF originale.
 
 ## Caratteristiche
 
@@ -31,6 +31,8 @@ documenti ──► lettura locale ──► riconoscimento dati ──► testo
 - **Caricamenti grandi:** contatore dei file mancanti, interruzione (tenendo o scartando quanto caricato), OCR in parallelo.
 - **File non supportati** (ad esempio le foto) elencati con nome, percorso e motivo, invece di essere ignorati in silenzio.
 - **Riconoscimento avanzato facoltativo:** un modello locale (MIT, su CPU) si affianca alle regole per nomi in contesto, società, numeri di ruolo e dati catastali. Se manca, la barra laterale permette di scaricarlo solo dopo consenso esplicito; ogni file è verificato con SHA-256 prima dell'attivazione. Il ripristino della risposta tollera i codici alterati dal modello e li segnala; IBAN, codice fiscale e partita IVA hanno validatori di formato. Vedi [`NOTICE.md`](NOTICE.md) e le sezioni 12-14 di [`PROGETTO_PRIVATEDOC_AI.md`](PROGETTO_PRIVATEDOC_AI.md).
+- **Categorie personalizzate:** dal menu di protezione puoi cercare le categorie con corrispondenza tollerante o crearne una nuova (per esempio «Numero di protocollo»). La libreria è condivisa tra le pratiche e salvata cifrata nel vault.
+- **Censura reale dei PDF:** scegli nuovamente il PDF originale e ottieni una copia con riquadri neri oppure codici come `[PERSONA_1]`. Il testo e le superfici accessorie vengono rimossi dal file, non semplicemente coperti; prima della consegna l'output viene riaperto e verificato. L'originale non viene aggiunto alla pratica né conservato dall'applicazione.
 - **Guida in-app** (`/guida`) con uso, limiti e riferimenti normativi.
 
 ## Avvio rapido
@@ -67,6 +69,7 @@ Variabili utili: `PRIVATEDOC_PORT`, `PRIVATEDOC_DATA_DIR`, `PRIVATEDOC_NO_BROWSE
 - L'OCR gira su CPU: circa 6-10 secondi a pagina; 100 pagine scansionate richiedono circa 10 minuti.
 - Una pratica sostituita con una copia più vecchia della stessa non viene riconosciuta. Un'ancora esterna è stata analizzata ma non viene implementata ora: aumenterebbe complessità e rischio di blocco senza proteggere dal ripristino congiunto o da un amministratore locale.
 - Le immagini incorporate in Word, PDF con testo o email non vengono lette.
+- La censura PDF richiede un livello di testo affidabile: i PDF costituiti soltanto da scansioni vengono rifiutati. Il testo dentro immagini e font non estraibili richiede OCR e non può essere garantito in questa versione. Se anche un solo dato richiesto resta rilevabile, il PDF non viene consegnato.
 - Il programma non gestisce l'informativa al cliente, la base giuridica, i contratti con il fornitore di IA né la valutazione d'impatto: restano a carico di chi lo usa.
 
 ## Riferimenti normativi
@@ -76,7 +79,7 @@ GDPR (art. 4 n. 5, considerando 26, artt. 5, 25, 28, 32, 35, 44-49), linee guida
 ## Sviluppo
 
 ```bash
-python -m unittest discover -s tests     # 156 test al 22/10/2026
+python -m unittest discover -s tests     # 182 test al 22/10/2026
 python test_pipeline.py                  # collaudo end-to-end su uno ZIP multi-formato
 ruff check .
 python tools/run_gates.py                # ruff + test + benchmark sul corpus inventato (fallisce se un dato resta leggibile)
