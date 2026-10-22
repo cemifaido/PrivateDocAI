@@ -64,56 +64,35 @@ Word, il browser e il programma con l'OCR.
 atto e le forme sono varie. In quel caso la misura va ripetuta sui documenti dell'utente con `tools/prova_gliner.py` (con un
 corpus proprio, in locale), e si valuterebbe un checkpoint più piccolo (`gliner_small-v2.1`) per contenere la memoria.
 
-## Alternativa manuale (integrazione e revisione di Gemini)
+## Alternativa manuale: le categorie personalizzate
 
-La soluzione già presente nel progetto (tramite categorie personalizzate censite nel Vault cifrato
-e menu contestuale da interfaccia web) non richiede modelli di deep learning aggiuntivi e risolve
-il problema con accuratezza deterministica al 100%.
+Le categorie create dall'utente (menu del tasto destro, termini sospetti, «Aggiungi dato») non richiedono nessun modello. Cinque
+casi tipici di uno studio, con la categoria che l'utente può creare una volta sola (resta nell'archivio cifrato per tutte le pratiche):
 
-### 5 Casi Concreti di Studio / Ufficio Legale
+1. **Protocollo interno** (`PROT-2026/004812`) -> `PROTOCOLLO`, codice `[PROTOCOLLO_1]`.
+2. **Codice cliente / matricola** (`CLI-98421-X`) -> `CODICE_CLIENTE`.
+3. **Nome in codice di un progetto** (`Progetto Titano`) -> `PROGETTO`.
+4. **Numero di pratica o fascicolo** (`77/B-2026`) -> `FASCICOLO` (oppure il preset «Numero di protocollo / pratica»).
+5. **Commessa o centro di costo** (`COMM-4509-MI`) -> `COMMESSA`.
 
-1. **Numero di Protocollo Interno** (es. `PROT-2026/004812`, `Prot. Gen. N. 142/A`):
-   - *Categoria:* `PROTOCOLLO` -> segnaposto generato `[PROTOCOLLO_1]`.
-   - *Limite GLiNER:* GLiNER fallisce sul 33-66% dei protocolli con sintassi non standard (`Zx-8841/2026`), esponendo a fughe parziali di identificativi critici.
-   - *Flusso manuale:* L'operatore evidenzia il testo e seleziona "Assegna a PROTOCOLLO" dal menu contestuale. Il motore propaga l'anonimizzazione su tutte le occorrenze identiche o normalizzate del documento e della pratica.
+Il dato scelto riceve lo stesso codice in tutte le occorrenze identiche (a meno di maiuscole e spazi) di tutti i documenti della
+pratica, e il ripristino della risposta lo reinserisce.
 
-2. **Codice Cliente / Matricola Interna** (es. `CLI-98421-X`, `COD_CLI_883`):
-   - *Categoria:* `CODICE_CLIENTE` -> segnaposto `[CODICE_CLIENTE_1]`.
-   - *Limite GLiNER:* Stringhe alfanumeriche isolate prive di contesto morfosintattico vengono spesso ignorate o scambiate per frammenti di codici fiscali/PIVA.
-   - *Flusso manuale:* Precisione del 100% senza allucinazioni. La categoria persiste nel file cifrato `categorie.json` del Vault ed è immediatamente disponibile per tutti i fascicoli futuri relativi al medesimo cliente.
+### Confronto
 
-3. **Nome di Progetto Riservato** (es. `Progetto Titano`, `Operazione Fenice`):
-   - *Categoria:* `PROGETTO` -> segnaposto `[PROGETTO_1]`.
-   - *Limite GLiNER:* A soglia 0.3 GLiNER produce falsi positivi (es. scambia la dicitura generica "Il progetto" per un nome entità); parole evocative (toponimi, nomi comuni) mandano in tilt il NER o portano a mascheramenti errati.
-   - *Flusso manuale:* Creazione one-click della categoria `PROGETTO`. De-anonimizzazione simmetrica reversibile garantita al 100% in fase di ripristino del documento.
-
-4. **Numero di Pratica / Fascicolo Giudiziario** (es. `FASC-883/2026-R.G.`, `Proc. Pen. 441/26`, `77/B-2026`):
-   - *Categoria:* `FASCICOLO` -> segnaposto `[FASCICOLO_1]`.
-   - *Limite GLiNER:* I tokenizzatori subword (BPE/WordPiece) spezzano i delimitatori (`/`, `-`, `.`), provocando un richiamo insoddisfacente (50% di mancati nel benchmark: `77/B-2026`, `12/XC/2025`).
-   - *Flusso manuale:* Selezione esatta dei confini di stringa (bounding box precisi sia su testo digitale che su PDF vettoriale), indipendente da qualsiasi errore di tokenizzazione subword.
-
-5. **Riferimento Commessa o Centro di Costo** (es. `COMM-4509-MI`, `CDC-FIN-02`):
-   - *Categoria:* `COMMESSA` -> segnaposto `[COMMESSA_1]`.
-   - *Limite GLiNER:* I modelli generici non dispongono di addestramento su acronimi o codifiche ERP proprietarie e non offrono garanzie di rilevamento.
-   - *Flusso manuale:* Registrata in 3 secondi dall'interfaccia utente (click destro -> Crea/Cerca categoria), memorizzata nel Vault crittografato locale a latenza zero.
-
----
-
-### Matrice Comparativa: GLiNER vs Categorie Personalizzate (Vault Locale)
-
-| Dimensione | GLiNER (`urchade/gliner_multi-v2.1`) | Categorie Personalizzate (Vault locale) |
+| Dimensione | GLiNER (`gliner_multi-v2.1`) | Categorie personalizzate |
 |:---|:---|:---|
-| **RAM Aggiuntiva** | ~1,8 GB (picco di caricamento a 2,8 GB) | **0 MB** (struttura JSON già in memoria, < 50 KB) |
-| **Occupazione Disco** | ~1,16 GB pesi safetensors + cache HuggingFace | **0 MB** (file cifrato `categorie.json`, pochi byte) |
-| **Latenza Inferenza** | 420 - 650 ms per 120 parole (cumulativo col modello base) | **< 1 ms** (lookup deterministico in memoria locale) |
-| **Accuratezza Codici Rari** | 73% - 80% (manca formati atipici con slash o trattini) | **100% deterministica** (nessuna allucinazione o omissione) |
-| **Confini Entità (Boundary)** | Soggetto a spezzettamento del tokenizer subword | **Esatto al carattere**, definito direttamente dall'utente |
-| **Costo e Manutenzione Licenze** | Nuova catena (PyTorch/Transformers/GLiNER), audit continuo | **Nessuna dipendenza esterna** (già integrato in Python/JS) |
-| **Stabilità Re-identificazione** | Possibile disallineamento se il suggeritore varia le etichette | **Mappatura 1:1 rigorosa e immutabile** nel Vault |
-| **Impatto su PC d'Ufficio (8 GB RAM)** | Rischio elevato di swapping su disco o rallentamento OS | **Nessun impatto** sulle risorse hardware dell'utente |
+| Memoria e disco | circa 1,8 GB di memoria (picco 2,8 GB) e 1,16 GB di file | nessun costo apprezzabile |
+| Tempo | 0,42-0,65 s ogni 120 parole, in più rispetto al modello attuale | immediato |
+| Codici di forma insolita | richiamo 0,73-0,80 nella nostra prova | quelli che l'utente indica vengono mascherati tutti |
+| Chi decide cosa proteggere | il modello, con errori da controllare | l'utente: se non si accorge di un dato, nessuno lo maschera |
+| Dipendenze e licenze | nuova catena da mantenere | nessuna |
 
-### Conclusioni della Revisione
-La combinazione tra il modello NER attuale (rizzo) per i dati anagrafici convenzionali e il sistema
-di Categorie Personalizzate via Vault per le entità di studio garantisce la massima riservatezza,
-zero costi hardware aggiuntivi e una precisione assoluta su dati critici legali/aziendali.
-L'introduzione di GLiNER in produzione allo stato attuale è **da respingere**.
+**Limite onesto dell'alternativa manuale:** non cerca nulla da sola. Dà la precisione di chi seleziona, ma il richiamo dipende da
+quanti dati l'utente nota; inoltre un dato scritto in un'altra forma (per esempio con una cifra diversa) è un'altra stringa e va
+indicato a parte. È il motivo per cui la verifica prima dell'invio resta necessaria.
+
+### Conclusione
+
+Il modello attuale per i dati anagrafici più le categorie personalizzate per i dati propri dello studio coprono il caso senza
+costi hardware aggiuntivi. L'introduzione di GLiNER allo stato attuale non è giustificata.
