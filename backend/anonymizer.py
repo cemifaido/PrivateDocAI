@@ -495,6 +495,27 @@ class DeterministicAnonymizer:
                     acronym = clean.isupper() and " " not in clean and len(clean) <= 5
                     self._defined.setdefault(doc_key, {})[canon] = {"token": token, "text": clean, "cs": acronym}
 
+    # words that can open a heading in capitals without being part of a company name ("POSTE IN ESSERE DA X")
+    _NAME_LEAD_INS = {
+        "poste", "in", "essere", "da", "dalla", "dal", "dallo", "dai", "dalle", "a", "di", "per", "con", "su", "tra",
+        "fra", "della", "delle", "dello", "del", "dei", "degli", "il", "lo", "la", "le", "i", "gli", "l", "e", "ed",
+        "favore", "carico", "conto", "parte", "cura", "opera", "nei", "confronti", "presso", "rilasciata", "rilasciato",
+        "emessa", "emesso", "stipulata", "stipulato", "concessa", "concesso", "sottoscritta", "sottoscritto",
+    }
+
+    def _company_core(self, canonical: str) -> str:
+        """
+        What identifies a company once the wrapping is taken away: the legal form and "società
+        benefit" ("acmeviaggi s.r.l. società benefit" = "acmeviaggi"), a trailing year ("... associati
+        del 2014") and lead-in words that came with it ("poste in essere da acmeviaggi s.r.l").
+        """
+        cleaned = self._STRIP_CORP_SUFFIX.sub("", canonical).strip()
+        cleaned = re.sub(r"\s+del(?:l')?\s+\d{2,4}$", "", cleaned)
+        words = cleaned.split()
+        while len(words) > 1 and words[0] in self._NAME_LEAD_INS:
+            words.pop(0)
+        return " ".join(words)
+
     def _rebuild_aliases(self):
         """
         1. Lets a surname appearing alone ("Rossi" / "Smith") reuse the token of the full name
@@ -535,6 +556,25 @@ class DeterministicAnonymizer:
             if r["category"] == "PERSONA" and self._is_automatic(r) and tokens and len(tokens) == 1:
                 self._merge_tokens(r["token"], next(iter(tokens)))
 
+        # The same company written in different ways is ONE party (see _company_core)
+        groups: Dict[str, List[Dict[str, Any]]] = {}
+        for r in self.registry:
+            if r["category"] == "SOCIETA":
+                core = self._company_core(r["canonical"])
+                if len(core) >= 4:
+                    groups.setdefault(core, []).append(r)
+        for items in groups.values():
+            if len({i["token"] for i in items}) < 2:
+                continue
+            # the form shown to the user: a manual one, else the cleanest (no lead-in words, with its legal form)
+            def tidiness(item):
+                bare = self._STRIP_CORP_SUFFIX.sub("", item["canonical"]).strip()
+                return (bare != self._company_core(item["canonical"]), bare == item["canonical"])
+            keep = next((i for i in items if not self._is_automatic(i)), None) or min(items, key=tidiness)
+            for item in items:
+                if item["token"] != keep["token"] and self._is_automatic(item):
+                    self._merge_tokens(item["token"], keep["token"])
+
         # Company base brands & aliases
         by_corp_alias: Dict[str, set] = {}
         for r in self.registry:
@@ -542,6 +582,9 @@ class DeterministicAnonymizer:
                 continue
             canonical = r["canonical"]
             cleaned = self._STRIP_CORP_SUFFIX.sub("", canonical).strip()
+            core = self._company_core(canonical)
+            if core != canonical:
+                cleaned = core        # "poste in essere da acmeviaggi s.r.l." is still just "acmeviaggi"
             candidates = []
             if cleaned and cleaned != canonical and len(cleaned) >= 3:
                 candidates.append(cleaned)
@@ -962,7 +1005,7 @@ class DeterministicAnonymizer:
         # 2. Prefix forms: Studio Legale ..., Studio Associato ..., Società Cooperativa ..., Law Offices of ...
         pattern_prefix = (
             r'\b((?i:Studio\s+Legale|Studio\s+Associato|Studi\s+Associati|Studio\s+Tributario|'
-            r'Studio\s+Professionale|Associazione\s+Professionale|Studio\s+Revisori\s+Associati|'
+            r'Studio\s+Professionale|Associazione\s+Professionale|'
             r'Societ[àa]\s+Cooperativa|Law\s+Offices?\s+of)'
             rf'(?:[^\S\r\n]+(?:{corp_word}|d[’\']|de[li]|della|delle|dei|di|da|e|ed|&|of|and)){{1,5}})\b'
         )
@@ -975,6 +1018,11 @@ class DeterministicAnonymizer:
         for pat in (pattern_suffix, pattern_prefix, pattern_firm_associati):
             for m in re.finditer(pat, text):
                 raw = m.group(1).strip()
+                # a word of 4+ letters closed by a full stop ends the sentence: the name is on one side of it
+                # (the company with its legal form is the LAST part; the "Studio ..." forms, the first)
+                sentences = re.split(r"(?<=[a-zà-ÿ]{4}\.)[^\S\r\n]+(?=[A-Z0-9])", raw)
+                if len(sentences) > 1:
+                    raw = (sentences[-1] if pat is pattern_suffix else sentences[0]).strip().rstrip(".")
                 clean = re.sub(
                     r'^(?:Per|Con|Tra|Fra|La|Il|Lo|Dalla|Dallo|Dall\'|Dal|Della|Dello|Del|Dei|Degli|The|By|From|For)\s+',
                     '',

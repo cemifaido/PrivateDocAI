@@ -184,6 +184,28 @@ class TestFullPrivateDocSuite(unittest.TestCase):
         self.anonymizer.analyze_documents([{"id": "A", "filename": "a.txt", "text": text}])
         return self.anonymizer.mask_text(text, doc_key="A")
 
+    def test_the_same_company_written_in_different_ways_is_one_party(self):
+        text = ("Le garanzie POSTE IN ESSERE DA ACMEVIAGGI S.R.L. sono valide. La Acmeviaggi s.r.l. societ\u00e0 benefit conferma. "
+                "Poi Acmeviaggi ha pagato. Alfa Beta s.r.l. e Alfa Gamma s.r.l. sono diverse.")
+        self._masked(text)
+        parties = {r["token"] for r in self.anonymizer.get_registry() if r["category"] == "SOCIETA"}
+        masked = self.anonymizer.mask_text(text, doc_key="A")
+        self.assertEqual(len(parties), 3)                       # Acmeviaggi, Alfa Beta, Alfa Gamma
+        self.assertNotIn("cmeviaggi", masked)
+        acmeviaggi = {self.anonymizer.forward_map[k] for k in self.anonymizer.forward_map if "acmeviaggi" in k}
+        self.assertEqual(len(acmeviaggi), 1)
+        shown = [r["original"] for r in self.anonymizer.get_registry() if r["token"] in acmeviaggi]
+        self.assertFalse(any(o.upper().startswith("POSTE") for o in shown))   # the tidy form is the one shown
+
+    def test_a_company_with_and_without_its_legal_form_is_one_party_and_names_do_not_cross_sentences(self):
+        text = "PricewaterhouseCoopers Business Services s.r.l firma. Studio Revisori Associati del 2014 e Studio Revisori Associati. Delta Uno s.r.l. paga."
+        self.anonymizer.analyze_documents([{"id": "A", "filename": "a.txt", "text": text}], extra_candidates={
+            "A": [{"raw": "PricewaterhouseCoopers Business Services", "category": "SOCIETA", "score": 0.9}]})
+        names = [r["original"] for r in self.anonymizer.get_registry()]
+        self.assertEqual(sum("pricewaterhouse" in n.lower() for n in names), 1)
+        self.assertEqual(sum("revisori" in n.lower() for n in names), 1)
+        self.assertTrue(any(n == "Delta Uno s.r.l" for n in names), names)     # not glued to the sentence before
+
     def test_offices_and_registers_are_not_taken_for_people(self):
         self._masked("Immobile censito al Catasto Fabbricati e Catasto Terreni, Agenzia delle Entrate. "
                      "The Service Provider shall pay. Mario Rossi firma.")
