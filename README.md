@@ -30,7 +30,7 @@ documenti ──► lettura locale ──► riconoscimento dati ──► testo
 - **Scelta dei documenti** da includere nella richiesta («confronta il Documento 3 con il 7»), con numerazione fissa; i nomi dei file non vengono inviati.
 - **Caricamenti grandi:** contatore dei file mancanti, interruzione (tenendo o scartando quanto caricato), OCR in parallelo.
 - **File non supportati** (ad esempio le foto) elencati con nome, percorso e motivo, invece di essere ignorati in silenzio.
-- **Riconoscimento avanzato facoltativo:** un modello locale (MIT, su CPU, scaricato a parte) si affianca alle regole per nomi in contesto, società, numeri di ruolo e dati catastali; la barra laterale mostra sempre se è attivo. Vedi [`NOTICE.md`](NOTICE.md) e la sezione 12 di [`PROGETTO_PRIVATEDOC_AI.md`](PROGETTO_PRIVATEDOC_AI.md).
+- **Riconoscimento avanzato facoltativo:** un modello locale (MIT, su CPU, scaricato a parte) si affianca alle regole per nomi in contesto, società, numeri di ruolo e dati catastali; la barra laterale mostra sempre se è attivo. Il ripristino della risposta tollera i codici alterati dal modello e li segnala; IBAN, codice fiscale e partita IVA hanno validatori di formato. Vedi [`NOTICE.md`](NOTICE.md) e le sezioni 12 e 13 di [`PROGETTO_PRIVATEDOC_AI.md`](PROGETTO_PRIVATEDOC_AI.md).
 - **Guida in-app** (`/guida`) con uso, limiti e riferimenti normativi.
 
 ## Avvio rapido
@@ -62,7 +62,7 @@ Variabili utili: `PRIVATEDOC_PORT`, `PRIVATEDOC_DATA_DIR`, `PRIVATEDOC_NO_BROWSE
 
 ## Limiti noti
 
-- Il rilevamento è a espressioni regolari, senza riconoscimento di entità (NER): nomi insoliti o dati scritti in modo anomalo possono sfuggire. I fatti descritti nel testo possono identificare le persone anche senza nomi.
+- Il rilevamento si basa su regole (e, se installato, su un modello locale facoltativo): nomi insoliti o dati scritti in modo anomalo possono sfuggire. I fatti descritti nel testo possono identificare le persone anche senza nomi.
 - **ChatGPT e Claude non sono automatizzabili:** i loro siti bloccano i browser automatici (e il programma non cerca di aggirare i controlli). Si usa «Copia & Decifra».
 - L'OCR gira su CPU: circa 6-10 secondi a pagina; 100 pagine scansionate richiedono circa 10 minuti.
 - Una pratica sostituita con una copia più vecchia della stessa non viene riconosciuta (serve un'ancora esterna).
@@ -76,12 +76,13 @@ GDPR (art. 4 n. 5, considerando 26, artt. 5, 25, 28, 32, 35, 44-49), linee guida
 ## Sviluppo
 
 ```bash
-python -m unittest discover -s tests     # 71 test
+python -m unittest discover -s tests     # circa 140 test
 python test_pipeline.py                  # collaudo end-to-end su uno ZIP multi-formato
 ruff check .
+python tools/run_gates.py                # ruff + test + benchmark sul corpus inventato (fallisce se un dato resta leggibile)
 ```
 
-Struttura: `app.py` (API FastAPI) · `backend/` (estrazione, anonimizzazione, archivio cifrato, servizio, bridge browser) · `static/` (interfaccia e guida) · `tests/` · `PrivateDocAI.spec` e `build_exe.bat` (eseguibile) · `check_dist.py` (controllo pre-distribuzione).
+Struttura: `app.py` (API FastAPI) · `backend/` (estrazione, anonimizzazione, archivio cifrato, servizio, bridge browser) · `static/` (interfaccia e guida) · `tests/` · `PrivateDocAI.spec` e `build_exe.bat` (eseguibile) · `check_dist.py` (controllo pre-distribuzione) · `tools/` (benchmark e controlli automatici, corpus di prova inventato).
 
 La documentazione tecnica completa (architettura, scelte, revisione di sicurezza) è in [`PROGETTO_PRIVATEDOC_AI.md`](PROGETTO_PRIVATEDOC_AI.md).
 
