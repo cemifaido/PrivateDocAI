@@ -19,7 +19,7 @@
 >    - **Comportamento alle scale estreme (N ≥ 5.000 – 20.000 entità)**: L'unico vero collo di bottiglia è il **muro di compilazione della regex** (da 1,6 s a N=5.000 fino a oltre 7–10 s cold a N=20.000).
 > 3. **Raccomandazione**:
 >    - Per il prodotto attuale (Milestone 2/3) **si mantiene la regex standard**, senza aggiungere dipendenze esterne.
->    - Il modulo [`tools/aho_corasick.py`](file:///D:/Share/py/CRYPTO-IDE/tools/aho_corasick.py) realizzato in puro Python rimane confinato in `tools/` come **prototipo di riserva** e dimostratore di scaling per future estensioni aziendali su cataloghi di grandi dimensioni.
+>    - Il modulo [`tools/aho_corasick.py`](../tools/aho_corasick.py) realizzato in puro Python rimane confinato in `tools/` come **prototipo di riserva (non equivalente a `mask_text`: non normalizza gli spazi multipli, non gestisce il punto finale facoltativo né insieme voci case-sensitive e case-insensitive)** e dimostratore di scaling per future estensioni aziendali su cataloghi di grandi dimensioni.
 
 ---
 
@@ -69,7 +69,7 @@ La ricerca dei token non scansiona i nomi originali ma le sole parentesi quadre/
 
 ## 5. Ruolo del Prototipo Aho-Corasick in `tools/`
 
-Il modulo [`tools/aho_corasick.py`](file:///D:/Share/py/CRYPTO-IDE/tools/aho_corasick.py) è stato corretto per garantire **piena idempotenza di `build()`** (nessuna duplicazione di uscite in caso di chiamate multiple).
+Il modulo [`tools/aho_corasick.py`](../tools/aho_corasick.py) è stato corretto per garantire **piena idempotenza di `build()`** (nessuna duplicazione di uscite in caso di chiamate multiple).
 
 Confronto a $N = 20.000$ entità su documento da 50 KB:
 - **Motore Regex attuale**: Compilazione **7.412 ms** + Sostituzione **1.961 ms** = **Totale ~9,4 s**

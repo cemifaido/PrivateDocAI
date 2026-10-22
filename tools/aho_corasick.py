@@ -8,6 +8,11 @@ Nota architetturale:
   Questo modulo è uno strumento prototipale in tools/ a supporto delle decisioni
   di scaling. Nel prodotto corrente (N <= 1.000), il motore regex standard
   in backend/anonymizer.py rimane la soluzione raccomandata per semplicità.
+
+Limiti noti (rilievo di revisione): NON è equivalente a mask_text: non normalizza gli
+spazi multipli, non gestisce il punto finale facoltativo e non permette di mescolare voci
+case-sensitive e case-insensitive. Prima di un uso reale servono questi allineamenti,
+test integrati e un confronto con la regex.
 """
 
 from collections import deque
