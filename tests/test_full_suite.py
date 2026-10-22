@@ -184,6 +184,12 @@ class TestFullPrivateDocSuite(unittest.TestCase):
         self.anonymizer.analyze_documents([{"id": "A", "filename": "a.txt", "text": text}])
         return self.anonymizer.mask_text(text, doc_key="A")
 
+    def test_offices_and_registers_are_not_taken_for_people(self):
+        self._masked("Immobile censito al Catasto Fabbricati e Catasto Terreni, Agenzia delle Entrate. "
+                     "The Service Provider shall pay. Mario Rossi firma.")
+        found = {r["original"] for r in self.anonymizer.get_registry()}
+        self.assertEqual(found, {"Mario Rossi"})
+
     def test_printed_iban_with_valid_checksum_is_masked(self):
         masked = self._masked("Bonifico su IT60 X054 2811 1010 0000 0123 456 entro il termine.")
         self.assertNotIn("X054", masked)

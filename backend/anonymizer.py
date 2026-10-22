@@ -29,6 +29,8 @@ class DeterministicAnonymizer:
         'gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno',
         'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre',
         'lunedi', 'martedi', 'mercoledi', 'giovedi', 'venerdi', 'sabato', 'domenica',
+        # Uffici e registri citati come tali (non sono persone), e parole inglesi di contratto
+        'catasto', 'fabbricati', 'terreni', 'agenzia', 'entrate', 'service', 'services',
         # Italiano - Termini contrattuali e comuni
         'contratto', 'accordo', 'fornitura', 'servizi', 'foglio', 'tabella', 'riepilogo',
         'cliente', 'fornitore', 'societa', 'azienda', 'oggetto', 'allegato',
