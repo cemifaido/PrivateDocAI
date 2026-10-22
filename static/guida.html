@@ -77,8 +77,8 @@
             <td>Un cognome condiviso da due persone resta in chiaro e viene segnalato, per non attribuire frasi alla persona sbagliata.</td></tr>
         <tr><td>Non invia i nomi dei file e degli archivi: il modello vede solo «Documento 1 [PDF]».</td>
             <td>Il <em>contenuto</em> dei fatti (circostanze, luoghi, ruoli, importi rotondi, date non riconosciute) può comunque identificare le persone per chi conosce il caso.</td></tr>
-        <tr><td>Ripristina i dati veri in locale.</td>
-            <td>Le pagine scansionate sono lette con l'OCR: gli errori di lettura possono lasciare un nome in una forma non riconosciuta.</td></tr>
+        <tr><td>Ripristina i dati veri in locale, anche se la risposta ha alterato un codice (<code>[persona_1]</code>, <code>PERSONA_1</code> senza parentesi).</td>
+            <td>I codici alterati ripristinati e quelli non riconosciuti sono elencati sopra il risultato: controlla che il senso sia giusto. Le pagine scansionate sono lette con l'OCR: gli errori di lettura possono lasciare un nome in una forma non riconosciuta.</td></tr>
         <tr><td>Cifra le pratiche salvate (AES-256-GCM, chiave derivata dalla password) e lega ogni file alla propria pratica.</td>
             <td>I cookie di accesso dei browser (cartella <code>profiles</code>) <strong>non</strong> sono cifrati dal programma. Se dimentichi la password, le pratiche sono perse.
                 Chi può sostituire i file con una <em>copia più vecchia</em> della stessa pratica non verrebbe riconosciuto: proteggi la cartella <code>data</code> con i permessi di Windows e con i tuoi backup.</td></tr>
