@@ -1,6 +1,6 @@
 import re
 import uuid
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 
 # How acts introduce a short name for a party: "(d'ora in avanti “X”)", ", di seguito “X”," ...
 _INTRO_WORDS = (
@@ -611,23 +611,47 @@ class DeterministicAnonymizer:
 
         return pattern.sub(to_token, text)
 
+    # An LLM answer often damages the placeholders: brackets lost, lower case, spaces or hyphens
+    # instead of the underscore. Only tokens registered in THIS session are ever replaced.
+    _BRACKETED_TOKEN = re.compile(r"\[\s*([A-Za-z]+(?:[\s_\-]+[A-Za-z0-9]+)+)\s*\]")
+    _BARE_TOKEN = re.compile(r"(?<![\w\[])([A-Z]+(?:_[A-Z]+)*_[A-Z0-9]+)(?![\w\]])")
+
+    def de_anonymize_with_report(self, masked_text: str) -> Tuple[str, Dict[str, Any]]:
+        """
+        Restores real values into the LLM answer in a single pass (restored text is never re-scanned).
+        Exact tokens are replaced as before; damaged forms of a registered token ([persona_1],
+        [ PERSONA 1 ], bare PERSONA_1) are replaced too and REPORTED, and a bracketed token of a known
+        category that is not registered (e.g. [PERSONA_9]) is left in place and reported as unknown.
+        """
+        fuzzy: List[Dict[str, str]] = []
+        unknown: List[str] = []
+        categories = set(self.counters)
+
+        def lookup(inner: str) -> Optional[str]:
+            token = "[" + re.sub(r"[\s_\-]+", "_", inner).upper() + "]"
+            return token if token in self.reverse_map else None
+
+        def replace(m):
+            bracketed = m.group(1) is not None
+            inner = m.group(1) if bracketed else m.group(2)
+            token = lookup(inner)
+            if token is None:
+                prefix = re.sub(r"[\s_\-]+", "_", inner).upper().rsplit("_", 1)[0]
+                if bracketed and prefix in categories and m.group(0) not in unknown:
+                    unknown.append(m.group(0))
+                return m.group(0)
+            if m.group(0) != token:
+                fuzzy.append({"found": m.group(0), "token": token})
+            return self.reverse_map[token]
+
+        # one combined pass: whatever is inserted is not scanned again
+        pattern = re.compile(f"{self._BRACKETED_TOKEN.pattern}|{self._BARE_TOKEN.pattern}")
+        restored = pattern.sub(replace, masked_text)
+        return restored, {"fuzzy": fuzzy, "unknown": unknown}
+
     def de_anonymize_text(self, masked_text: str) -> str:
-        """
-        Restores real entity values into the LLM generated output.
-        Replaces longest tokens first to avoid substring collisions.
-        """
-        restored = masked_text
-        sorted_tokens = sorted(self.reverse_map.items(), key=lambda kv: len(kv[0]), reverse=True)
-
-        for token, original_val in sorted_tokens:
-            restored = restored.replace(token, original_val)
-
-            # Also catch if LLM replaced underscore with space: [PERSONA 1]
-            spaced_token = token.replace("_", " ")
-            if spaced_token in restored:
-                restored = restored.replace(spaced_token, original_val)
-
-        return restored
+        """Restores real entity values into the LLM generated output (see de_anonymize_with_report)."""
+        return self.de_anonymize_with_report(masked_text)[0]
 
     def verify_masking_coverage(self, masked_text: str) -> List[Dict[str, Any]]:
         """

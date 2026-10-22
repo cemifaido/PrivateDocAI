@@ -1068,3 +1068,12 @@ textarea:focus {
     cursor: pointer;
 }
 .ctx-menu button:hover { background: var(--primary); }
+
+.restore-notice {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--accent-amber);
+  color: var(--accent-amber);
+  font-size: 0.9rem;
+}

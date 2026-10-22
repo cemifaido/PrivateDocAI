@@ -1037,8 +1037,26 @@ function showResults() {
     renderResultContent();
 }
 
+function renderRestoreNotice(report) {
+    const box = document.getElementById('restoreNotice');
+    if (!box) return;
+    const fuzzy = (report && report.fuzzy) || [];
+    const unknown = (report && report.unknown) || [];
+    const lines = [];
+    if (fuzzy.length) {
+        lines.push(`⚠ ${fuzzy.length} segnaposto scritti in modo alterato dal modello sono stati ripristinati lo stesso: ` +
+            fuzzy.slice(0, 8).map(f => `«${f.found}» → ${f.token}`).join(', ') + '. Controlla che il senso sia giusto.');
+    }
+    if (unknown.length) {
+        lines.push(`⚠ Segnaposto non riconosciuti, lasciati come sono: ${unknown.slice(0, 8).join(', ')}.`);
+    }
+    box.style.display = lines.length ? 'block' : 'none';
+    box.textContent = lines.join(' ');
+}
+
 function renderResultContent() {
     if (!state.lastResult) return;
+    renderRestoreNotice(state.lastResult.restore_report);
     if (state.currentViewMode === "decrypted") {
         resultOutput.textContent = state.lastResult.deanonymized_response;
     } else {

@@ -490,13 +490,14 @@ class DocumentService:
         session = self.get_or_create_session(session_id)
         anonymizer: DeterministicAnonymizer = session["anonymizer"]
 
-        restored_response = anonymizer.de_anonymize_text(llm_raw_response)
+        restored_response, restore_report = anonymizer.de_anonymize_with_report(llm_raw_response)
 
         result = {
             "session_id": session_id,
             "raw_masked_response": llm_raw_response,
             "deanonymized_response": restored_response,
-            "entities_restored_count": len(anonymizer.get_registry())
+            "entities_restored_count": len(anonymizer.get_registry()),
+            "restore_report": restore_report,
         }
         session["last_result"] = result
         session.setdefault("history", []).append({

@@ -155,6 +155,31 @@ class TestFullPrivateDocSuite(unittest.TestCase):
         
         self.assertEqual(restored, "Il contraente Mario Rossi si è accordato con Acme S.r.l..")
 
+    def test_damaged_placeholders_are_restored_and_reported(self):
+        self.anonymizer.get_or_create_token("Mario Rossi", "PERSONA")
+        self.anonymizer.get_or_create_token("Anna Verdi", "PERSONA")
+        self.anonymizer.get_or_create_token("Acme S.r.l.", "SOCIETA")
+        reply = "[persona_1], [ PERSONA 2 ], PERSONA_1 e [Societa-A] firmano; [PERSONA_9] non esiste; [Allegato A] resta."
+        restored, report = self.anonymizer.de_anonymize_with_report(reply)
+        self.assertEqual(restored, "Mario Rossi, Anna Verdi, Mario Rossi e Acme S.r.l. firmano; "
+                                   "[PERSONA_9] non esiste; [Allegato A] resta.")
+        self.assertEqual(len(report["fuzzy"]), 4)
+        self.assertEqual(report["unknown"], ["[PERSONA_9]"])       # a known category, but never registered
+
+    def test_exact_placeholders_are_not_reported_and_restored_text_is_not_rescanned(self):
+        self.anonymizer.get_or_create_token("Mario Rossi", "PERSONA")
+        self.anonymizer.get_or_create_token("Codice PERSONA_1 interno", "ORG")
+        restored, report = self.anonymizer.de_anonymize_with_report("Parla [PERSONA_1] per [ORG_1].")
+        self.assertEqual(restored, "Parla Mario Rossi per Codice PERSONA_1 interno.")   # inserted text left alone
+        self.assertEqual(report, {"fuzzy": [], "unknown": []})
+
+    def test_bare_words_that_are_not_registered_tokens_are_untouched(self):
+        self.anonymizer.get_or_create_token("Mario Rossi", "PERSONA")
+        text = "Vedi PERSONA_7, SOCIETA_X e la persona 1 del testo."
+        restored, report = self.anonymizer.de_anonymize_with_report(text)
+        self.assertEqual(restored, text)
+        self.assertEqual(report, {"fuzzy": [], "unknown": []})
+
     def test_preflight_leak_verification(self):
         self.anonymizer.get_or_create_token("Mario Rossi", "PERSONA")
         
