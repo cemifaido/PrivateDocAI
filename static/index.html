@@ -78,6 +78,12 @@
                 <label style="display:none; font-size:0.78rem; color:var(--text-secondary); cursor:pointer;" id="nerExtendedRow">
                     <input type="checkbox" id="nerExtended"> Profilo esteso (città, CAP, età, ora…)
                 </label>
+                <button type="button" class="btn-secondary" id="nerDownloadBtn" style="display:none; width:100%; margin:6px 0; font-size:0.78rem;">⬇ Scarica il modello</button>
+                <div id="nerDownloadProgress" style="display:none; font-size:0.75rem; margin:6px 0;">
+                    <progress id="nerDownloadBar" max="100" value="0" style="width:100%;"></progress>
+                    <div id="nerDownloadText"></div>
+                    <button type="button" class="btn-text" id="nerDownloadCancel" style="font-size:0.75rem;">Annulla</button>
+                </div>
                 <a href="/guida#modello" target="_blank" rel="noopener" style="font-size:0.75rem;">Come si installa</a>
             </div>
 
@@ -363,6 +369,28 @@
             </div>
             <div class="modal-footer">
                 <button class="btn-primary" id="saveCustomEntityBtn">Conferma e Maschera</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="modelModal" style="display:none; z-index:1900;">
+        <div class="modal-dialog" style="max-width:520px;">
+            <div class="modal-header">
+                <h3>Scaricare il modello di riconoscimento?</h3>
+                <button class="close-btn" id="modelModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc">Questa è l'unica operazione in cui il programma si collega a internet, e solo se confermi.</p>
+                <ul style="font-size:0.85rem; padding-left:18px;">
+                    <li>Dimensione: <strong id="modelModalSize"></strong> (5 file da Hugging Face, revisione fissa).</li>
+                    <li>Licenza: <strong id="modelModalLicense"></strong>.</li>
+                    <li>Ogni file è verificato con l'impronta SHA-256 prima dell'uso; se una sola non corrisponde, tutto viene scartato.</li>
+                    <li>Il modello gira solo sul tuo computer: nessun testo o documento viene inviato.</li>
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="modelModalNo">Annulla</button>
+                <button class="btn-primary" id="modelModalYes">Scarica e installa</button>
             </div>
         </div>
     </div>

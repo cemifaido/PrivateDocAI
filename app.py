@@ -214,6 +214,32 @@ async def ner_settings(data: NerSettings):
         doc_service.ner.extended = data.extended
     return doc_service.ner.status()
 
+@app.get("/api/model/info")
+async def model_info():
+    return doc_service.model_downloader.info()
+
+@app.get("/api/model/status")
+async def model_status():
+    return {**doc_service.model_downloader.status(), "ner": doc_service.ner.status()}
+
+class ModelDownloadRequest(BaseModel):
+    consent: bool = False
+
+@app.post("/api/model/download")
+async def model_download(data: ModelDownloadRequest):
+    if not data.consent:
+        raise HTTPException(status_code=400, detail="Serve il consenso esplicito dell'utente.")
+    if doc_service.ner.status()["state"] not in ("missing", "rejected", "error"):
+        raise HTTPException(status_code=409, detail="Il modello è già installato.")
+    if not doc_service.model_downloader.start():
+        raise HTTPException(status_code=409, detail="Un download è già in corso.")
+    return doc_service.model_downloader.status()
+
+@app.post("/api/model/cancel")
+async def model_cancel():
+    doc_service.model_downloader.cancel()
+    return {"ok": True}
+
 @app.get("/api/upload/progress")
 async def upload_progress():
     return doc_service.progress

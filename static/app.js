@@ -688,9 +688,60 @@ async function loadNerStatus() {
             text.style.color = "var(--text-secondary)";
         }
         row.style.display = (st.state === 'ready' || st.state === 'off') ? 'block' : 'none';
+        document.getElementById('nerDownloadBtn').style.display =
+            (st.state === 'missing' || st.state === 'rejected') ? 'block' : 'none';
         document.getElementById('nerExtended').checked = !!st.extended;
     } catch { /* ignore: the page works without it */ }
 }
+
+// ---------- Explicit model download (the only time the program goes online, and only after a yes) ----------
+function formatMegabytes(bytes) {
+    return (bytes / 1048576).toFixed(bytes >= 1073741824 ? 0 : 1) + ' MB';
+}
+
+async function pollModelDownload() {
+    const box = document.getElementById('nerDownloadProgress');
+    try {
+        const st = await (await fetch('/api/model/status')).json();
+        const active = st.state === 'downloading' || st.state === 'verifying' || st.state === 'installing';
+        box.style.display = active ? 'block' : 'none';
+        if (active) {
+            const pct = st.total_bytes ? Math.round(100 * st.done_bytes / st.total_bytes) : 0;
+            document.getElementById('nerDownloadBar').value = pct;
+            const labels = {downloading: 'Scaricamento', verifying: 'Verifica dei file', installing: 'Installazione'};
+            document.getElementById('nerDownloadText').textContent =
+                `${labels[st.state]}: ${formatMegabytes(st.done_bytes)} di ${formatMegabytes(st.total_bytes)}` +
+                (st.state === 'downloading' && st.speed ? ` · ${(st.speed / 1048576).toFixed(1)} MB/s` : '') +
+                (st.error ? ` · ${st.error}` : '');
+            setTimeout(pollModelDownload, 1000);
+        } else {
+            if (st.state === 'error') alert('Download del modello non riuscito: ' + st.error);
+            loadNerStatus();
+        }
+    } catch { setTimeout(pollModelDownload, 3000); }
+}
+
+document.getElementById('nerDownloadBtn').addEventListener('click', async () => {
+    try {
+        const info = await (await fetch('/api/model/info')).json();
+        document.getElementById('modelModalSize').textContent = formatMegabytes(info.total_bytes);
+        document.getElementById('modelModalLicense').textContent = info.license;
+        document.getElementById('modelModal').style.display = 'flex';
+    } catch { alert('Impossibile leggere le informazioni sul modello.'); }
+});
+document.getElementById('modelModalNo').addEventListener('click', () => document.getElementById('modelModal').style.display = 'none');
+document.getElementById('modelModalClose').addEventListener('click', () => document.getElementById('modelModal').style.display = 'none');
+document.getElementById('modelModalYes').addEventListener('click', async () => {
+    document.getElementById('modelModal').style.display = 'none';
+    const resp = await fetch('/api/model/download', {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({consent: true})
+    });
+    if (!resp.ok) { alert((await resp.json()).detail || 'Download non avviato.'); return; }
+    pollModelDownload();
+});
+document.getElementById('nerDownloadCancel').addEventListener('click', async () => {
+    await fetch('/api/model/cancel', {method: 'POST'});
+});
 
 document.getElementById('nerExtended').addEventListener('change', async (e) => {
     await fetch('/api/ner/settings', {
@@ -711,6 +762,7 @@ async function initVault() {
 async function afterUnlock() {
     document.getElementById('vaultModal').style.display = 'none';
     loadNerStatus();
+    pollModelDownload();   // shows the progress again if a download is running
     await loadCases();
     await restoreSession();
 }

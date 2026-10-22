@@ -12,6 +12,7 @@ from .anonymizer import DeterministicAnonymizer
 from .browser_bridge import BrowserBridge
 from .vault import Vault
 from .ner import NerDetector
+from .model_downloader import ModelDownloader
 
 # Type aliases for clean code
 Tuple_Session = Dict[str, Any]
@@ -32,9 +33,12 @@ class DocumentService:
         self.extractor = DocumentExtractor()
         self.progress: Dict[str, Any] = {"file": "", "pages_done": 0, "pages_total": 0, "phase": "ocr"}
         # optional model (see backend/ner.py): used only when its folder is present and verified
-        self.ner = NerDetector(model_dir=os.environ.get("PRIVATEDOC_NER_DIR")
-                               or os.path.join(APP_DIR, "models", "rizzo-pii-0.3B"))
+        self.model_dir = (os.environ.get("PRIVATEDOC_NER_DIR")
+                          or os.path.join(APP_DIR, "models", "rizzo-pii-0.3B"))
+        self.ner = NerDetector(model_dir=self.model_dir)
         self.ner.start_verification()   # hashes the files in the background, never blocking the interface
+        # explicit download of the model (only ever started by the user's yes, see model_downloader.py)
+        self.model_downloader = ModelDownloader(self.model_dir, on_installed=self.reload_detector)
         self._job_id = ""
         self._upload_lock = threading.Lock()   # one upload at a time (desktop app)
         self._state_lock = threading.RLock()   # session changes + their snapshot/save
@@ -49,6 +53,14 @@ class DocumentService:
         # In-memory sessions; each one is mirrored to an encrypted file once the vault is unlocked
         self.sessions: Dict[str, Dict[str, Any]] = {}
         self.vault: Optional[Vault] = None
+
+    def reload_detector(self) -> None:
+        """Puts a fresh detector over the (newly installed) model folder, keeping the user's settings."""
+        old = self.ner
+        fresh = NerDetector(model_dir=self.model_dir)
+        fresh.enabled, fresh.extended = old.enabled, old.extended
+        fresh.start_verification()
+        self.ner = fresh
 
     def _set_progress(self, job_id: str, done: int, total: int, name: str, phase: str = "ocr"):
         if job_id == self._job_id:  # a stopped job must not write into the next one
