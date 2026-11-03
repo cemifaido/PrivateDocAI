@@ -39,3 +39,4 @@ schema/
 # A scratch script that contains the text of a real court filing: must never be published
 test_legal_extraction.py
 scratch_*.py
+release/

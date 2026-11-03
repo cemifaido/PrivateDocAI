@@ -39,27 +39,44 @@ documenti ──► lettura locale ──► riconoscimento dati ──► testo
 
 ## Avvio rapido
 
-### Con l'eseguibile (consigliato)
+### Con l'installer (consigliato)
 
-Costruiscilo con `build_exe.bat` (richiede Python e le dipendenze) e copia l'**intera cartella** `dist\PrivateDocAI` sul PC. Avvia `PrivateDocAI.exe`: si apre il browser su `http://127.0.0.1:8765`. Al primo avvio scegli la password dell'archivio (almeno 12 caratteri) e **annotala: non è recuperabile**.
+Scarica `PrivateDocAI-<versione>-Setup.exe` dalla pagina delle [Release](../../releases) e avvialo. L'installazione guidata:
 
-- Le cartelle `data` e `profiles` si creano accanto all'`.exe`: non distribuire una cartella già usata (`build_exe.bat` controlla che sia pulita).
+- ti **chiede in quale cartella installare** il programma e se installarlo solo per te o per tutti gli utenti del PC;
+- offre di creare un **collegamento sul desktop** con l'icona dello scudo (e ne crea sempre uno nel menu Start);
+- al termine può avviare subito il programma.
+
+Il programma **non apre nessuna finestra nera**: parte e si apre il browser su `http://127.0.0.1:8765`. Al primo avvio scegli la password dell'archivio (almeno 12 caratteri) e **annotala: non è recuperabile**. Subito dopo, se il modello locale non è ancora installato, il programma ti **propone in evidenza di scaricarlo** (vedi il riconoscimento avanzato tra le [Caratteristiche](#caratteristiche)); puoi farlo anche più tardi dalla barra laterale.
+
+**Come si chiude.** Chiudere la scheda del browser **non spegne** il programma, che continua a girare in background. In quel caso compare un avviso con due indicazioni:
+- per **rientrare** basta aprire `http://127.0.0.1:8765` nel browser (o rilanciare il programma dall'icona);
+- per **spegnerlo** si apre la pagina e si clicca **«Chiudi programma»** in basso nella barra laterale (l'avviso permette anche di spegnerlo subito).
+
+I dati di lavoro (pratiche cifrate, profili del browser, modello scaricato) stanno in `%LOCALAPPDATA%\PrivateDocAI`, non nella cartella del programma. La **disinstallazione non li cancella** a meno che tu non lo confermi: chiede esplicitamente prima di eliminarli.
+
+### Con la cartella portatile (ZIP)
+
+In alternativa, lo ZIP della Release contiene l'**intera cartella** `PrivateDocAI`: estraila dove vuoi e avvia `PrivateDocAI.exe`. Qui `data`, `profiles` e `models` si creano **accanto all'`.exe`**: non distribuire una cartella già usata (`build_exe.bat` controlla che sia pulita).
 
 #### Eseguibile non firmato (prima release)
 
-Questa è una prima release e l'eseguibile **non è ancora firmato digitalmente**: Windows non conosce l'editore e può mostrare degli avvisi. Non indica un problema nel file. Cosa fare:
+Questa è una prima release e l'installer e l'eseguibile **non sono ancora firmati digitalmente**: Windows non conosce l'editore e può mostrare degli avvisi. Non indica un problema nel file. Cosa fare:
 
-1. **Se hai ricevuto uno ZIP**, prima di estrarlo: clic destro sul file → *Proprietà* → spunta **Annulla blocco** (o *Sblocca*) → *OK*. Poi estrai l'**intera** cartella.
+1. **Se hai scaricato un file** (Setup o ZIP), prima di avviarlo: clic destro sul file → *Proprietà* → spunta **Annulla blocco** (o *Sblocca*) → *OK*. Per lo ZIP, poi estrai l'**intera** cartella.
 2. **Al primo avvio** può comparire «Windows ha protetto il PC» (SmartScreen): clic su **Ulteriori informazioni**, poi su **Esegui comunque**. L'avviso compare di solito una volta sola.
 3. **Se l'antivirus blocca o mette in quarantena il file**, è un falso positivo frequente per i programmi creati con PyInstaller: ripristinalo dalla quarantena e aggiungi la cartella alle eccezioni, oppure chiedi all'amministratore di sistema.
-4. **Verifica che il file sia quello originale** confrontando l'impronta SHA-256 con quella indicata da chi te lo ha consegnato:
+4. **Verifica che il file sia quello originale** confrontando l'impronta SHA-256 con quella indicata nella pagina della Release:
    ```powershell
-   Get-FileHash .\PrivateDocAI.exe -Algorithm SHA256
+   Get-FileHash .\PrivateDocAI-<versione>-Setup.exe -Algorithm SHA256
    ```
    Se non coincide, non avviarlo.
-5. Il browser si apre su `http://127.0.0.1:8765`; la finestra nera che compare con il programma deve restare aperta finché lo usi.
 
-La firma del codice e un installer sono previsti nelle versioni successive.
+La firma del codice è prevista nelle versioni successive.
+
+### Costruire l'installer
+
+`build_exe.bat` costruisce l'eseguibile, controlla che la cartella sia pulita e, se è installato [Inno Setup 6](https://jrsoftware.org/isdl.php), crea l'installer in `release\` (script: [`installer/PrivateDocAI.iss`](installer/PrivateDocAI.iss)). L'icona si rigenera con `python tools/make_icon.py`.
 
 ### Da sorgente
 
@@ -105,7 +122,7 @@ Struttura: `app.py` (API FastAPI) · `backend/` (estrazione, anonimizzazione, ar
 
 La documentazione tecnica completa (architettura, scelte, revisione di sicurezza) è in [`PROGETTO_PRIVATEDOC_AI.md`](PROGETTO_PRIVATEDOC_AI.md).
 
-Le analisi della Milestone 2 sono conservate in [`docs/ANALISI_VAULT.md`](docs/ANALISI_VAULT.md), [`docs/PROTOTIPO_ONNX_INT8.md`](docs/PROTOTIPO_ONNX_INT8.md), [`docs/MISURE_SOSTITUZIONE.md`](docs/MISURE_SOSTITUZIONE.md), [`docs/MISURE_CONTESTO.md`](docs/MISURE_CONTESTO.md) e [`docs/DISEGNO_DOWNLOAD_MODELLO.md`](docs/DISEGNO_DOWNLOAD_MODELLO.md). In sintesi: INT8 non entra nel prodotto perché perde richiamo sulle carte di pagamento; Aho-Corasick non entra perché la regex è già rapida alle dimensioni normali e il prototipo non è semanticamente equivalente; l'anti-rollback è rimandato perché un'ancora locale non copre ripristini congiunti o amministratori locali e non deve rischiare di bloccare l'utente. Il download manager è invece implementato; installer e firma restano rimandati perché richiedono identità di firma, certificato, gestione della reputazione SmartScreen e collaudo su installazioni Windows reali.
+Le analisi della Milestone 2 sono conservate in [`docs/ANALISI_VAULT.md`](docs/ANALISI_VAULT.md), [`docs/PROTOTIPO_ONNX_INT8.md`](docs/PROTOTIPO_ONNX_INT8.md), [`docs/MISURE_SOSTITUZIONE.md`](docs/MISURE_SOSTITUZIONE.md), [`docs/MISURE_CONTESTO.md`](docs/MISURE_CONTESTO.md) e [`docs/DISEGNO_DOWNLOAD_MODELLO.md`](docs/DISEGNO_DOWNLOAD_MODELLO.md). In sintesi: INT8 non entra nel prodotto perché perde richiamo sulle carte di pagamento; Aho-Corasick non entra perché la regex è già rapida alle dimensioni normali e il prototipo non è semanticamente equivalente; l'anti-rollback è rimandato perché un'ancora locale non copre ripristini congiunti o amministratori locali e non deve rischiare di bloccare l'utente. Il download manager è invece implementato, e così l'installer; la firma del codice resta rimandata perché richiede identità di firma, certificato e gestione della reputazione SmartScreen.
 
 ## Licenza
 

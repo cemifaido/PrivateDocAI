@@ -12,7 +12,8 @@ from pydantic import BaseModel, Field
 from backend.document_service import DocumentService, SessionInvalidated, UploadBusy
 from backend.vault import Vault, VaultError, WrongPassword
 from backend.pdf_redaction import PdfRedactionError, RedactionIncomplete
-from backend.runtime import RESOURCE_DIR
+from backend.runtime import RESOURCE_DIR, FROZEN
+from backend.page_watch import PageWatcher, windows_message_box
 
 app = FastAPI(title="PrivateDoc AI - Privacy & Multi-Format LLM Hub")
 
@@ -50,7 +51,7 @@ async def local_security(request: Request, call_next):
         if not hmac.compare_digest(token, APP_TOKEN):
             return JSONResponse(status_code=403, content={"detail": "Token mancante o non valido."})
         vault = doc_service.vault
-        if not path.startswith("/api/vault/") and path != "/api/shutdown" \
+        if not path.startswith(("/api/vault/", "/api/page/")) and path != "/api/shutdown" \
                 and vault is not None and not vault.unlocked:
             return JSONResponse(status_code=423, content={"detail": "vault_locked"})
     return await call_next(request)
@@ -61,14 +62,55 @@ class PasswordRequest(BaseModel):
     confirm: Optional[str] = None
 
 
-@app.post("/api/shutdown")
-async def shutdown():
+def _stop_server() -> None:
     """Orderly stop: interrupts a running upload, locks the archive, then stops the server."""
+    page_watcher.stopping()
     doc_service.cancel_upload()
     doc_service.lock_all()
     server = getattr(app.state, "server", None)
     if server is not None:
         server.should_exit = True
+
+
+def _warn_still_running() -> None:
+    """Last page closed but the server is still up: say so, and offer to switch it off."""
+    port = os.environ.get("PRIVATEDOC_PORT", "8765")
+    text = ("Hai chiuso la pagina, ma PrivateDoc AI continua a girare in background "
+            "(l'archivio resta sbloccato).\n\n"
+            f"Per rientrare apri http://127.0.0.1:{port} nel browser, oppure rilancia il programma dall'icona.\n\n"
+            "Per spegnerlo definitivamente apri la pagina e clicca «Chiudi programma» "
+            "(in basso nella barra laterale), oppure premi Sì qui sotto per spegnerlo ora.\n\n"
+            "Spegnere ora il programma?")
+    try:
+        if windows_message_box(text, "PrivateDoc AI è ancora in esecuzione"):
+            _stop_server()
+    except Exception:
+        pass   # a warning that cannot be shown must never break the program
+
+
+# Only the packaged, console-less app needs the warning (from source the terminal is visible).
+page_watcher = PageWatcher(_warn_still_running if FROZEN and os.name == "nt" else (lambda: None))
+
+
+class PageEvent(BaseModel):
+    page_id: str = Field(min_length=1, max_length=64)
+
+
+@app.post("/api/page/open")
+async def page_open(data: PageEvent):
+    page_watcher.opened(data.page_id)
+    return {"status": "ok"}
+
+
+@app.post("/api/page/close")
+async def page_close(data: PageEvent):
+    page_watcher.closed(data.page_id)
+    return {"status": "ok"}
+
+
+@app.post("/api/shutdown")
+async def shutdown():
+    _stop_server()
     return {"status": "closing"}
 
 

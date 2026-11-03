@@ -8,8 +8,23 @@ FROZEN = getattr(sys, "frozen", False)
 # Folder holding the project files (static/, OCR models): inside the bundle when packaged
 RESOURCE_DIR = getattr(sys, "_MEIPASS", None) or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Writable folder (profiles/, data/): next to the .exe when packaged, the project folder otherwise
-APP_DIR = os.path.dirname(sys.executable) if FROZEN else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+EXE_DIR = os.path.dirname(sys.executable) if FROZEN else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Written next to the .exe by the installer only: the program folder (often Program Files) is not
+# writable by normal users, so an installed copy keeps its working data under the user profile.
+INSTALLED_MARKER = os.path.join(EXE_DIR, "installed.flag")
+
+
+def _writable_dir() -> str:
+    if FROZEN and os.path.isfile(INSTALLED_MARKER):
+        base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
+        return os.path.join(base, "PrivateDocAI")
+    return EXE_DIR
+
+
+# Writable folder (profiles/, data/, models/): next to the .exe for the portable ZIP, under
+# %LOCALAPPDATA%\PrivateDocAI for an installed copy, the project folder from source
+APP_DIR = _writable_dir()
 
 _CHROME_PATHS = (
     r"C:\Program Files\Google\Chrome\Application\chrome.exe",

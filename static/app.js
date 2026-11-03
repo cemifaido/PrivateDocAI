@@ -73,6 +73,16 @@ const _nativeFetch = (url, options = {}) => _rawFetch(url, {
     ...options,
     headers: {...(options.headers || {}), 'X-PrivateDoc-Token': APP_TOKEN}
 });
+// Tell the server when this page opens and closes: if the last one closes while the program keeps
+// running in the background, the server warns the user (see backend/page_watch.py).
+const PAGE_ID = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now();
+const _pageEvent = (what, extra = {}) => _nativeFetch('/api/page/' + what, {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({page_id: PAGE_ID}), ...extra
+}).catch(() => {});
+_pageEvent('open');
+window.addEventListener('pageshow', (e) => { if (e.persisted) _pageEvent('open'); });
+window.addEventListener('pagehide', () => _pageEvent('close', {keepalive: true}));
+
 window.fetch = async (url, options) => {
     const resp = await _nativeFetch(url, options);
     if (resp.status === 423) initVault();
@@ -431,7 +441,7 @@ function setupEventListeners() {
         try {
             await _nativeFetch('/api/shutdown', {method: 'POST'});
         } catch { /* the server may drop the connection while closing */ }
-        document.body.innerHTML = '<div style="font-family:sans-serif; color:#f8fafc; background:#0a0d14; height:100vh; display:flex; align-items:center; justify-content:center; text-align:center;"><div><h2>Programma chiuso</h2><p>Puoi chiudere questa scheda del browser.</p></div></div>';
+        document.body.innerHTML = '<div style="font-family:sans-serif; color:#f8fafc; background:#0a0d14; height:100vh; display:flex; align-items:center; justify-content:center; text-align:center;"><div><h2>Programma chiuso</h2><p>Puoi chiudere questa scheda del browser.</p><p style="opacity:.7;">Per riaprirlo, rilancia PrivateDoc AI dall’icona.</p></div></div>';
     });
 
     document.getElementById('lockVaultBtn').addEventListener('click', async () => {
@@ -722,8 +732,32 @@ async function loadNerStatus() {
         document.getElementById('nerDownloadBtn').style.display =
             (st.state === 'missing' || st.state === 'rejected') ? 'block' : 'none';
         document.getElementById('nerExtended').checked = !!st.extended;
+        highlightNerDownload(st);
     } catch { /* ignore: the page works without it */ }
 }
+
+// First launch without the model: make the optional recogniser impossible to miss. Asked again on the
+// next launch unless the user says "don't ask again"; never while a download is running or the model is active.
+let nerWelcomeShown = false;
+function highlightNerDownload(st) {
+    const missing = st.state === 'missing';
+    document.getElementById('nerBox').classList.toggle('ner-attention', missing);
+    if (!missing || nerWelcomeShown) return;
+    nerWelcomeShown = true;
+    if (localStorage.getItem('nerWelcomeNever') === '1') return;
+    document.getElementById('nerWelcomeModal').style.display = 'flex';
+}
+const closeNerWelcome = () => document.getElementById('nerWelcomeModal').style.display = 'none';
+document.getElementById('nerWelcomeClose').addEventListener('click', closeNerWelcome);
+document.getElementById('nerWelcomeLater').addEventListener('click', closeNerWelcome);
+document.getElementById('nerWelcomeNever').addEventListener('click', () => {
+    localStorage.setItem('nerWelcomeNever', '1');
+    closeNerWelcome();
+});
+document.getElementById('nerWelcomeYes').addEventListener('click', () => {
+    closeNerWelcome();
+    document.getElementById('nerDownloadBtn').click();   // same explicit-consent dialog as the sidebar button
+});
 
 // ---------- Explicit model download (the only time the program goes online, and only after a yes) ----------
 function formatMegabytes(bytes) {

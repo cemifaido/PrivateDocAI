@@ -96,6 +96,7 @@
                 <button id="resetSessionBtn" class="btn-text">Nuova Pratica</button>
                 <button id="lockVaultBtn" class="btn-text">🔒 Blocca archivio</button>
                 <button id="quitBtn" class="btn-text">⏻ Chiudi programma</button>
+                <p style="font-size:0.72rem; color:var(--text-secondary); text-align:center; margin:2px 8px 0;">Chiudere la scheda del browser <strong>non spegne</strong> il programma: per riaprirlo vai su http://127.0.0.1:8765, per spegnerlo usa questo pulsante.</p>
             </div>
         </aside>
 
@@ -377,6 +378,28 @@
             </div>
             <div class="modal-footer">
                 <button class="btn-primary" id="saveCustomEntityBtn">Conferma e Maschera</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="nerWelcomeModal" style="display:none; z-index:1850;">
+        <div class="modal-dialog" style="max-width:560px;">
+            <div class="modal-header">
+                <h3>🛡️ Attiva il riconoscimento avanzato</h3>
+                <button class="close-btn" id="nerWelcomeClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc">Il programma funziona già con le sole regole, ma <strong>da solo può lasciarsi sfuggire dei dati</strong>. Il modello locale, facoltativo, trova in più nomi di persona nel contesto, società, numeri di ruolo e dati catastali.</p>
+                <ul style="font-size:0.85rem; padding-left:18px;">
+                    <li>Gira <strong>solo sul tuo computer</strong>: nessun testo o documento viene inviato.</li>
+                    <li>Si scarica una volta sola (circa 1,2 GB) e ogni file è verificato prima dell'uso.</li>
+                    <li>Lo puoi installare anche in seguito dalla barra laterale, riquadro «Riconoscimento avanzato».</li>
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-text" id="nerWelcomeNever">Non chiederlo più</button>
+                <button class="btn-secondary" id="nerWelcomeLater">Più tardi</button>
+                <button class="btn-primary" id="nerWelcomeYes">Scarica il modello</button>
             </div>
         </div>
     </div>

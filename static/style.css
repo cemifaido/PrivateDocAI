@@ -1099,3 +1099,21 @@ textarea:focus {
 .cat-list { max-height: 220px; overflow-y: auto; }
 .ctx-menu .cat-row.active, .ctx-menu .cat-row:hover { background: var(--primary); }
 .cat-popover { z-index: 3000; min-width: 250px; }
+
+/* Optional recogniser not installed: draw the eye to it */
+#nerBox.ner-attention {
+    border: 2px solid var(--accent-amber);
+    animation: nerPulse 2s ease-in-out infinite;
+}
+#nerBox.ner-attention #nerDownloadBtn {
+    background: var(--accent-amber);
+    color: #1a1a1a;
+    font-weight: 600;
+}
+@keyframes nerPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.55); }
+    50% { box-shadow: 0 0 0 7px rgba(245, 158, 11, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+    #nerBox.ner-attention { animation: none; }
+}

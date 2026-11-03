@@ -41,27 +41,44 @@ documents ──► local reading ──► data detection ──► text with c
 
 ## Quick start
 
-### With the executable (recommended)
+### With the installer (recommended)
 
-Build it with `build_exe.bat` (requires Python and the dependencies) and copy the **entire** `dist\PrivateDocAI` folder to the PC. Run `PrivateDocAI.exe`: the browser opens at `http://127.0.0.1:8765`. On first launch choose the archive password (at least 12 characters) and **write it down: it cannot be recovered**.
+Download `PrivateDocAI-<version>-Setup.exe` from the [Releases](../../releases) page and run it. The setup wizard:
 
-- The `data` and `profiles` folders are created next to the `.exe`: do not distribute a folder that has already been used (`build_exe.bat` checks that it is clean).
+- **asks where to install** the program, and whether to install it for you only or for all users of the PC;
+- offers to create a **desktop shortcut** with the shield icon (a Start menu entry is always created);
+- can launch the program as soon as it finishes.
+
+The program **opens no black console window**: it starts and the browser opens at `http://127.0.0.1:8765`. On first launch choose the archive password (at least 12 characters) and **write it down: it cannot be recovered**. Right after that, if the local model is not installed yet, the program **prominently offers to download it** (see the advanced recogniser under [Features](#features)); you can also do it later from the sidebar.
+
+**How to quit.** Closing the browser tab does **not** stop the program: it keeps running in the background. In that case a notice appears with two hints:
+- to **get back in**, open `http://127.0.0.1:8765` in the browser (or launch the program again from its icon);
+- to **switch it off**, open the page and click **"Chiudi programma"** at the bottom of the sidebar (the notice also lets you switch it off right away).
+
+Working data (encrypted cases, browser profiles, the downloaded model) lives in `%LOCALAPPDATA%\PrivateDocAI`, not in the program folder. **Uninstalling does not delete it** unless you confirm: it asks explicitly first.
+
+### With the portable folder (ZIP)
+
+Alternatively, the Release ZIP contains the **entire** `PrivateDocAI` folder: extract it anywhere and run `PrivateDocAI.exe`. Here `data`, `profiles` and `models` are created **next to the `.exe`**: do not distribute a folder that has already been used (`build_exe.bat` checks that it is clean).
 
 #### Unsigned executable (first release)
 
-This is a first release and the executable is **not yet digitally signed**: Windows does not know the publisher and may show warnings. This does not mean there is a problem with the file. What to do:
+This is a first release and the installer and the executable are **not yet digitally signed**: Windows does not know the publisher and may show warnings. This does not mean there is a problem with the file. What to do:
 
-1. **If you received a ZIP**, before extracting it: right-click the file → *Properties* → tick **Unblock** → *OK*. Then extract the **whole** folder.
+1. **If you downloaded a file** (Setup or ZIP), before running it: right-click the file → *Properties* → tick **Unblock** → *OK*. For the ZIP, then extract the **whole** folder.
 2. **On first launch** you may see "Windows protected your PC" (SmartScreen): click **More info**, then **Run anyway**. The warning usually appears only once.
 3. **If your antivirus blocks or quarantines the file**, this is a common false positive for programs built with PyInstaller: restore it from quarantine and add the folder to the exclusions, or ask your system administrator.
-4. **Check that the file is the original** by comparing its SHA-256 hash with the one given by whoever handed it to you:
+4. **Check that the file is the original** by comparing its SHA-256 hash with the one on the Release page:
    ```powershell
-   Get-FileHash .\PrivateDocAI.exe -Algorithm SHA256
+   Get-FileHash .\PrivateDocAI-<version>-Setup.exe -Algorithm SHA256
    ```
    If it does not match, do not run it.
-5. The browser opens at `http://127.0.0.1:8765`; the black console window that appears with the program must stay open while you use it.
 
-Code signing and an installer are planned for later versions.
+Code signing is planned for later versions.
+
+### Building the installer
+
+`build_exe.bat` builds the executable, checks that the folder is clean and, if [Inno Setup 6](https://jrsoftware.org/isdl.php) is installed, creates the installer in `release\` (script: [`installer/PrivateDocAI.iss`](installer/PrivateDocAI.iss)). The icon is regenerated with `python tools/make_icon.py`.
 
 ### From source
 
@@ -105,7 +122,7 @@ python tools/run_gates.py                # ruff + tests + benchmark on the inven
 
 Layout: `app.py` (FastAPI API) · `backend/` (extraction, anonymisation, encrypted archive, service, browser bridge) · `static/` (interface and guide) · `tests/` · `PrivateDocAI.spec` and `build_exe.bat` (executable) · `check_dist.py` (pre-distribution check) · `tools/` (benchmarks and automatic checks, invented test corpus).
 
-Full technical documentation (architecture, decisions, security review) is in [`PROGETTO_PRIVATEDOC_AI.md`](PROGETTO_PRIVATEDOC_AI.md) (Italian). Installer and code signing are deferred because they require a signing identity, a certificate, SmartScreen reputation management and testing on real Windows installations.
+Full technical documentation (architecture, decisions, security review) is in [`PROGETTO_PRIVATEDOC_AI.md`](PROGETTO_PRIVATEDOC_AI.md) (Italian). The installer is implemented; code signing is deferred because it requires a signing identity, a certificate and SmartScreen reputation management.
 
 ## Licence
 

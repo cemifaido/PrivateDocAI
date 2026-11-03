@@ -1,4 +1,4 @@
-# PyInstaller spec: cartella (non onefile) con PrivateDocAI.exe
+# PyInstaller spec: cartella (non onefile) con PrivateDocAI.exe (senza console, con icona)
 # Build: build_exe.bat  (oppure: pyinstaller --noconfirm PrivateDocAI.spec)
 import os
 from PyInstaller.utils.hooks import collect_all, collect_submodules
@@ -58,7 +58,8 @@ exe = EXE(
     [],
     exclude_binaries=True,
     name='PrivateDocAI',
-    console=True,
+    console=False,   # no black window: the app is closed with its own button
+    icon='assets/privatedoc.ico',
     upx=False,
 )
 coll = COLLECT(
