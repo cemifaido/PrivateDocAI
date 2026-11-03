@@ -27,6 +27,26 @@ documents ──► local reading ──► data detection ──► text with c
 4. **Sending:** with Gemini, ChatGPT and Claude you use "Copy and open" (it copies the anonymous text, opens the site in your normal browser, then you paste the answer back). Google, OpenAI and Anthropic reject automated browsers and the program does not try to get around that check. Optional and off by default: the official Gemini API with your own key (see the in-app guide for the data-handling conditions).
 5. **Result** with the real data, exportable to Word. From the protected-data screen you can also create a truly redacted copy of an original PDF.
 
+## Screenshots
+
+The screenshots use **entirely invented documents** (the repository's test corpus).
+
+**1. Load your documents.** Files, whole folders or ZIP archives; each document gets a fixed number.
+
+![Loaded documents](docs/img/03-documenti.png)
+
+**2. Privacy Shield.** Every recognised item (companies, emails, IBANs, cadastral data…) gets a code, always the same one across all documents. You can correct, remove, merge or add items.
+
+![Privacy Shield with the protected data and their codes](docs/img/04-scudo-privacy.png)
+
+**3. Pre-send check.** You see the exact text that will leave: real data is replaced by codes such as `[PERSONA_1]`, `[SOCIETA_A]`, `[CODICE_FISCALE_1]`.
+
+![Anonymous text about to be sent](docs/img/05-controllo-prima-dell-invio.png)
+
+**4. Advanced recogniser (optional).** On first launch the program offers to download the local model, only after your consent; it also works without it, with the rules alone.
+
+![Offer to install the local model](docs/img/02-modello-locale.png)
+
 ## Features
 
 - **Formats:** PDF (scanned too, with OCR), Word, ODT, Excel, `.eml`/`.msg` email, text, nested ZIPs, folders.

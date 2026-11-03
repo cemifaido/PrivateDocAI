@@ -25,6 +25,26 @@ documenti ──► lettura locale ──► riconoscimento dati ──► testo
 4. **Invio:** con Gemini, ChatGPT e Claude si usa «Copia e apri» (copia il testo anonimo, apre il sito nel tuo browser normale, poi incolli la risposta); Google, OpenAI e Anthropic rifiutano i browser automatici e il programma non cerca di aggirare il controllo. Facoltativa e spenta di default: l'API ufficiale di Gemini con la tua chiave (vedi la guida in-app per le condizioni sui dati).
 5. **Risultato** con i dati reali, esportabile in Word. Dalla schermata dei dati protetti puoi anche creare una copia realmente censurata di un PDF originale.
 
+## Schermate
+
+Le schermate usano **documenti interamente inventati** (corpus di prova del repository).
+
+**1. Carichi i documenti.** File, cartelle intere o archivi ZIP; ogni documento riceve un numero fisso.
+
+![Documenti acquisiti](docs/img/03-documenti.png)
+
+**2. Scudo Privacy.** Ogni dato riconosciuto (società, email, IBAN, dati catastali…) riceve un codice, sempre lo stesso in tutti i documenti. Puoi correggere, togliere, unire o aggiungere dati.
+
+![Scudo Privacy con i dati protetti e i relativi codici](docs/img/04-scudo-privacy.png)
+
+**3. Controllo prima dell'invio.** Vedi l'esatto testo che uscirà: al posto dei dati reali ci sono solo codici come `[PERSONA_1]`, `[SOCIETA_A]`, `[CODICE_FISCALE_1]`.
+
+![Testo anonimo che sta per essere inviato](docs/img/05-controllo-prima-dell-invio.png)
+
+**4. Riconoscimento avanzato (facoltativo).** Al primo avvio il programma propone di scaricare il modello locale, solo dopo il tuo consenso; funziona anche senza, con le sole regole.
+
+![Proposta di installare il modello locale](docs/img/02-modello-locale.png)
+
 ## Caratteristiche
 
 - **Formati:** PDF (anche scansionati, con OCR), Word, ODT, Excel, email `.eml`/`.msg`, testo, ZIP annidati, cartelle.

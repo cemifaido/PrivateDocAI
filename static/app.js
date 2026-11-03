@@ -826,6 +826,7 @@ async function initVault() {
 
 async function afterUnlock() {
     document.getElementById('vaultModal').style.display = 'none';
+    checkAuth();
     loadNerStatus();
     pollModelDownload();   // shows the progress again if a download is running
     loadGeminiApi();
@@ -1397,7 +1398,9 @@ async function checkAuth() {
     const provider = state.activeProvider;
     try {
         const resp = await fetch(`/api/auth/status?provider=${provider}`);
+        if (resp.status === 423) return;   // archive still locked: checked again right after unlocking
         const data = await resp.json();
+        if (!resp.ok || !data.message) throw new Error('unexpected answer');
         if (provider !== state.activeProvider) return; // user switched provider meanwhile
         const styles = {
             connected: ["✓ ", "var(--accent-emerald)"],
