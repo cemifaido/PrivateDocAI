@@ -1,5 +1,7 @@
 # 🛡️ PrivateDoc AI
 
+🇮🇹 Italiano · 🇬🇧 [English](README.en.md)
+
 **Analizza e confronta atti, contratti ed email con un modello linguistico senza mandare fuori dal computer i nomi, i codici e gli importi che il programma riconosce.**
 
 PrivateDoc AI è un'applicazione locale per Windows pensata per chi lavora su documenti riservati (studi legali, commercialisti, consulenti). Maschera i dati personali *prima* dell'invio, lascia lavorare il modello sul testo mascherato e ricompone la risposta in locale con i dati veri. Non servono chiavi API.
@@ -41,8 +43,23 @@ documenti ──► lettura locale ──► riconoscimento dati ──► testo
 
 Costruiscilo con `build_exe.bat` (richiede Python e le dipendenze) e copia l'**intera cartella** `dist\PrivateDocAI` sul PC. Avvia `PrivateDocAI.exe`: si apre il browser su `http://127.0.0.1:8765`. Al primo avvio scegli la password dell'archivio (almeno 12 caratteri) e **annotala: non è recuperabile**.
 
-- L'`.exe` non è firmato: Windows può mostrare un avviso.
 - Le cartelle `data` e `profiles` si creano accanto all'`.exe`: non distribuire una cartella già usata (`build_exe.bat` controlla che sia pulita).
+
+#### Eseguibile non firmato (prima release)
+
+Questa è una prima release e l'eseguibile **non è ancora firmato digitalmente**: Windows non conosce l'editore e può mostrare degli avvisi. Non indica un problema nel file. Cosa fare:
+
+1. **Se hai ricevuto uno ZIP**, prima di estrarlo: clic destro sul file → *Proprietà* → spunta **Annulla blocco** (o *Sblocca*) → *OK*. Poi estrai l'**intera** cartella.
+2. **Al primo avvio** può comparire «Windows ha protetto il PC» (SmartScreen): clic su **Ulteriori informazioni**, poi su **Esegui comunque**. L'avviso compare di solito una volta sola.
+3. **Se l'antivirus blocca o mette in quarantena il file**, è un falso positivo frequente per i programmi creati con PyInstaller: ripristinalo dalla quarantena e aggiungi la cartella alle eccezioni, oppure chiedi all'amministratore di sistema.
+4. **Verifica che il file sia quello originale** confrontando l'impronta SHA-256 con quella indicata da chi te lo ha consegnato:
+   ```powershell
+   Get-FileHash .\PrivateDocAI.exe -Algorithm SHA256
+   ```
+   Se non coincide, non avviarlo.
+5. Il browser si apre su `http://127.0.0.1:8765`; la finestra nera che compare con il programma deve restare aperta finché lo usi.
+
+La firma del codice e un installer sono previsti nelle versioni successive.
 
 ### Da sorgente
 

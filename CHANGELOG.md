@@ -4,7 +4,11 @@ Formato ispirato a [Keep a Changelog](https://keepachangelog.com/it/1.1.0/); le 
 
 ## [Non rilasciato]
 
+### Note di rilascio
+- **Eseguibile non firmato (prima release):** `PrivateDocAI.exe` non ha ancora la firma digitale, quindi Windows (SmartScreen) o l'antivirus possono mostrare un avviso. Come procedere (sblocco dello ZIP, «Ulteriori informazioni → Esegui comunque», verifica SHA-256) è spiegato nel [README](README.md#eseguibile-non-firmato-prima-release). Firma del codice e installer sono rimandati alle versioni successive.
+
 ### Aggiunto
+- README in inglese (`README.en.md`).
 - **Gemini passa al flusso manuale «Copia e apri»**: Google rifiuta l'accesso dal browser automatico (e il programma non cerca di aggirare il controllo); ora Gemini funziona come ChatGPT e Claude, con un clic che copia il testo anonimo (dopo il controllo), apre il sito nel browser normale e porta al campo della risposta. Se il browser automatico non parte, o Google mostra il rifiuto, il programma lo dice con la causa invece di restare in silenzio.
 - Finestre di ispezione e di incolla molto più grandi.
 - **API ufficiale di Gemini con la chiave dell'utente**, facoltativa e spenta di default: la chiave sta solo nell'archivio cifrato, viaggia in un'intestazione HTTPS, si attiva solo dopo aver letto l'avviso sulla gestione dei dati (quota gratuita o a pagamento) e passa dallo stesso controllo prima dell'invio.
